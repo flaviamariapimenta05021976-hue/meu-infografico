@@ -4,74 +4,64 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 
-# Configuração da Página
+# 1. Configuração da Página
 st.set_page_config(page_title="Vigilância Epidemiológica", layout="wide")
 
-# Estilo CSS para imitar o layout profissional
+# 2. Estilo Visual (CSS)
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
-    .header-box { text-align: center; padding: 10px; margin-bottom: 20px; }
-    .section-title { color: #000000; font-weight: bold; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; margin-bottom: 20px; font-size: 24px; }
-    .footer-text { font-size: 12px; color: #6c757d; text-align: center; margin-top: 50px; }
+    .section-title { color: #1a5276; font-weight: bold; border-bottom: 2px solid #dee2e6; padding-bottom: 5px; margin-bottom: 20px; font-size: 24px; }
     </style>
 """, unsafe_allow_html=True)
 
-# Título Principal
+# 3. Cabeçalho
 st.markdown("<h1 style='text-align: center;'>Vigilância Epidemiológica: Doenças Respiratórias (SRAG e Síndrome Gripal)</h1>", unsafe_allow_html=True)
 st.write("---")
 
-# Layout de duas colunas principais
-col_monitoramento, col_gestao = st.columns([1, 1], gap="large")
+# 4. Divisão em Colunas
+col_monitor, col_gestao = st.columns([1, 1], gap="large")
 
 # --------------------------------------------------------------------------------
 # COLUNA 1: MONITORAMENTO DE CASOS
 # --------------------------------------------------------------------------------
-with col_monitoramento:
+with col_monitor:
     st.markdown("<div class='section-title'>Monitoramento de Casos de SRAG</div>", unsafe_allow_html=True)
     
-    # Perfil Epidemiológico e Imagem Central (Pulmão/Humano)
-    c1, c2 = st.columns([1, 1.2])
+    # Bloco Superior: Perfil e Humano Central
+    c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("**Perfil Epidemiológico Detalhado**")
-        st.caption("Análise de casos por sexo")
-        # Gráfico de barras simples para sexo
-        fig_sexo = px.bar(x=[55, 45], y=["Feminino", "Masculino"], orientation='h', height=150, color_discrete_sequence=['#5dade2'])
-        fig_sexo.update_layout(margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_sexo, use_container_width=True)
-        
+        st.image("análise por sexo.png", use_container_width=True)
+        st.write("")
         st.markdown("**Comorbidades**")
-        try: st.image("comorbidades.png", width=200)
-        except: st.info("Suba 'comorbidades.png'")
-
+        st.image("comorbidades.png", width=250)
     with c2:
-        try: st.image("humano_central.png", use_container_width=True)
-        except: st.info("Suba 'humano_central.png'")
+        # Aqui usamos o perfil epidemiológico como imagem central (humano)
+        st.image("perfil epidemiologico.png", use_container_width=True)
 
-    # Agentes Etiológicos
+    # Bloco do Meio: Agente Etiológico
     st.write("---")
     st.markdown("**Identificação do Agente Etiológico**")
-    ca1, ca2 = st.columns([0.5, 1.5])
+    ca1, ca2 = st.columns([0.4, 1.6])
     with ca1:
-        try: st.image("microscopio.png", width=100)
-        except: st.write("🔬")
+        st.image("agente etiologico.png", width=120)
     with ca2:
-        # Métricas de agentes
-        m1, m2 = st.columns(2)
-        m1.metric("Influenza A", "12%", delta_color="normal")
-        m2.metric("Influenza B", "5%")
-        m3, m4 = st.columns(2)
-        m3.metric("SARS-CoV-2", "68%")
-        m4.metric("RSV", "15%")
+        # Organiza os ícones dos vírus em grelha
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: st.image("influenza A.png", caption="12%")
+        with m2: st.image("influenza B.png", caption="5%")
+        with m3: st.image("SARS_COV.png", caption="68%")
+        with m4: st.image("RSV.png", caption="15%")
 
-    # Tendência por Semana
+    # Bloco Inferior: Tendência (Gráfico Gerado por Código)
     st.write("---")
     st.markdown("**Tendência por Semana Epidemiológica**")
-    semanas = list(range(1, 31))
-    notificacoes = [5, 10, 20, 50, 120, 250, 300, 280, 200, 100, 50, 20] + [10]*18
+    semanas = list(range(1, 21))
+    casos = [5, 12, 25, 50, 110, 200, 280, 260, 190, 120, 80, 45, 20, 10, 5, 3, 2, 1, 1, 1]
     fig_onda = go.Figure()
-    fig_onda.add_trace(go.Scatter(x=semanas, y=notificacoes, fill='tozeroy', name='Notificações', line_color='#2e86c1'))
-    fig_onda.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0))
+    fig_onda.add_trace(go.Scatter(x=semanas, y=casos, fill='tozeroy', line_color='#1a5276'))
+    fig_onda.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_onda, use_container_width=True)
 
 # --------------------------------------------------------------------------------
@@ -80,26 +70,26 @@ with col_monitoramento:
 with col_gestao:
     st.markdown("<div class='section-title'>Gestão e Localização do Atendimento</div>", unsafe_allow_html=True)
     
-    # Capilaridade (Mapa das UBS)
+    # Capilaridade
     st.markdown("**Capilaridade do Atendimento**")
-    st.caption("Monitoramento de atendimentos distribuídos por distritos sanitários e UBS.")
-    try: st.image("mapa_ubs.png", use_container_width=True)
-    except: st.info("Suba 'mapa_ubs.png'")
+    st.image("capilaridade.jpg", use_container_width=True)
 
-    # Ciclos Sazonais
+    # Ciclos Sazonais (Gráfico Gerado por Código para dinamismo)
     st.write("---")
-    st.markdown("**Ciclos Sazonais 2023/24**")
-    try: st.image("ciclos_sazonais.png", use_container_width=True)
-    except:
-        c1, c2 = st.columns(2)
-        c1.line_chart([10, 20, 50, 40, 20])
-        c2.line_chart([5, 15, 80, 60, 30])
+    st.markdown("**Ciclos Sazonais (Comparativo)**")
+    c_ano1, c_ano2 = st.columns(2)
+    with c_ano1:
+        st.caption("2023")
+        st.line_chart([10, 25, 40, 35, 15], height=150)
+    with c_ano2:
+        st.caption("2024")
+        st.line_chart([5, 20, 65, 55, 25], height=150)
 
     # Fontes de Informação
     st.write("---")
     st.markdown("**Fontes de Informação Integradas**")
-    try: st.image("fontes_integradas.png", use_container_width=True)
-    except: st.success("SIVEP-Gripe + e-SUS + VIVVER")
+    st.image("Fontes de informação integradas.jpg", use_container_width=True)
 
 # Rodapé
-st.markdown("<div class='footer-text'>Consolidação de dados provenientes do SIVEP-Gripe, e-SUS e sistema VIVVER.</div>", unsafe_allow_html=True)
+st.divider()
+st.markdown("<p style='text-align: center; color: gray; font-size: 12px;'>Dados extraídos automaticamente. NIS - Núcleo de Informação em Saúde.</p>", unsafe_allow_html=True)
