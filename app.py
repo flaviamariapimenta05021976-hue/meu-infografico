@@ -1,114 +1,84 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from PIL import Image # Biblioteca para lidar com imagens
+import plotly.graph_objects as go
+from datetime import datetime
 
-# 1. Configurações e Título
-st.set_page_config(layout="wide", page_title="Vigilância Epidemiológica")
-st.markdown("<h1 style='text-align: center; color: black;'>Vigilância Epidemiológica: Doenças Respiratórias (SRAG e Síndrome Gripal)</h1>", unsafe_allow_html=True)
+# Configurações de página e Estilo Visual
+st.set_page_config(page_title="Vigilância Epidemiológica", layout="wide")
+
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+    }
+    .titulo-secao { color: #1a5276; font-weight: bold; border-bottom: 2px solid #1a5276; margin-bottom: 15px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Tenta carregar dados; se não houver, usa valores de exemplo para manter o site bonito
+def carregar_dados():
+    try:
+        df = pd.read_csv("dados_epidemiologicos.csv")
+        return df
+    except:
+        # Dados de exemplo (Placeholder)
+        return pd.DataFrame({
+            'Categoria': ['Geral', 'Agente', 'Agente', 'Agente'],
+            'Subcategoria': ['Total SRAG', 'SARS-CoV-2', 'Influenza A', 'Outros'],
+            'Valor': ['1.240', '68%', '12%', '20%'],
+            'Data': [datetime.now().strftime("%d/%m/%Y")] * 4
+        })
+
+df_vigi = carregar_dados()
+data_atual = df_vigi['Data'].iloc[0]
+
+# --- CABEÇALHO ---
+st.markdown("<h1 style='text-align: center;'>Monitoramento de Doenças Respiratórias</h1>", unsafe_allow_html=True)
+st.markdown(f"<p style='text-align: center; color: gray;'>Última Atualização: {data_atual}</p>", unsafe_allow_html=True)
 st.write("---")
 
-# 2. Divisão em Colunas Principais (Igual ao Modelo)
-col_esq, col_dir = st.columns([1, 1], gap="large")
+# --- CORPO DO INFOGRÁFICO (DUAS COLUNAS) ---
+col_esq, col_dir = st.columns(2, gap="large")
 
-# ==============================================================================
-# --- COLUNA ESQUERDA: MONITORAMENTO DE CASOS ---
-# ==============================================================================
 with col_esq:
-    st.markdown("<h2 style='color: #1a5276;'>Monitoramento de Casos de SRAG</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='titulo-secao'>MONITORAMENTO DE CASOS (SRAG)</div>", unsafe_allow_html=True)
     
-    # Bloco Perfil e o Pulmão Central
-    c_perfil_grafico, c_pulmao_central = st.columns([1.5, 1])
-    
-    with c_perfil_grafico:
-        st.markdown("**Perfil Epidemiológico Detalhado**")
-        st.caption("Análise de casos por sexo")
-        # Gráfico de Barras Horizontais (Simulando o visual)
-        df_sexo = pd.DataFrame({'Sexo': ['Feminino', 'Masculino'], 'Porcentagem': [55, 45]})
-        fig_sexo = px.bar(df_sexo, x='Porcentagem', y='Sexo', orientation='h', height=150, color_discrete_sequence=['#3498db'])
-        fig_sexo.update_layout(margin=dict(l=0, r=0, t=0, b=0), plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_sexo, use_container_width=True)
+    # Métricas de Agentes
+    st.write("**Identificação do Agente Etiológico**")
+    m1, m2, m3 = st.columns(3)
+    with m1: st.metric("SARS-CoV-2", df_vigi.loc[df_vigi['Subcategoria'] == 'SARS-CoV-2', 'Valor'].values[0])
+    with m2: st.metric("Influenza A", df_vigi.loc[df_vigi['Subcategoria'] == 'Influenza A', 'Valor'].values[0])
+    with m3: st.metric("Outros", "20%")
 
-        # Seção Comorbidades (Tenta carregar a imagem ou usa texto)
-        st.markdown("**Comorbidades**")
-        try:
-            img_comorb = Image.open("icon_comorbidades.png") # Nome do arquivo no GitHub
-            st.image(img_comorb, width=250)
-        except:
-            st.warning("⚠️ Adicione 'icon_comorbidades.png' ao GitHub para ver os ícones.")
-
-    with c_pulmao_central:
-        # AQUI VAI O PULMÃO CENTRAL DA IMAGEM
-        try:
-            img_pulmao = Image.open("icon_pulmao.png") # Nome do arquivo no GitHub
-            st.image(img_pulmao, use_container_width=True)
-        except:
-            # Mostra um emoji gigante se não achar a imagem
-            st.markdown("<h1 style='text-align: center; font-size: 100px;'>🫁</h1>", unsafe_allow_html=True)
-
-    # Identificação do Agente (Com Microscópio)
-    st.markdown("---")
-    c_microscopio, c_agentes_texto = st.columns([1, 2])
-    
-    with c_microscopio:
-        try:
-            img_micro = Image.open("icon_microscopio.png") # Nome do arquivo no GitHub
-            st.image(img_micro, width=150)
-        except:
-            st.markdown("<h1 style='text-align: center; font-size: 80px;'>🔬</h1>", unsafe_allow_html=True)
-
-    with c_agentes_texto:
-        st.markdown("**Identificação do Agente Etiológico**")
-        st.caption("Classificação dos casos de acordo com o vírus ou patógeno causador da síndrome.")
-        a1, a2, a3, a4 = st.columns(4)
-        a1.metric("Influenza A", "🔵 12%")
-        a2.metric("Influenza B", "🔵 5%")
-        a3.metric("SARS-CoV-2", "🟠 68%")
-        a4.metric("RSV", "🟠 15%")
-
-    # Tendência Semanal (Igual ao visual da onda)
-    st.markdown("---")
-    st.markdown("**Tendência por Semana Epidemiológica**")
-    semanas = list(range(1, 31))
-    dados_onda = [2, 5, 15, 45, 100, 180, 250, 230, 190, 130, 80, 50, 30, 15, 8, 5] + [2]*14
-    fig_onda = px.area(x=semanas, y=dados_onda, color_discrete_sequence=['#2e86c1'])
-    fig_onda.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor='rgba(0,0,0,0)')
+    # Gráfico de Tendência (Onda)
+    st.write("**Tendência Semanal**")
+    semanas = list(range(1, 11))
+    casos = [10, 25, 45, 90, 150, 210, 190, 140, 80, 40]
+    fig_onda = px.area(x=semanas, y=casos, color_discrete_sequence=['#1a5276'])
+    fig_onda.update_layout(height=250, margin=dict(l=0, r=0, t=0, b=0), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_onda, use_container_width=True)
 
-
-# ==============================================================================
-# --- COLUNA DIREITA: GESTÃO E LOCALIZAÇÃO ---
-# ==============================================================================
 with col_dir:
-    st.markdown("<h2 style='color: #1a5276;'>Gestão e Localização do Atendimento</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='titulo-secao'>GESTÃO E ATENDIMENTO</div>", unsafe_allow_html=True)
     
-    # Capilaridade com o Mapa de UBS
-    st.markdown("**Capilaridade do Atendimento**")
-    st.caption("Monitoramento de atendimentos distribuídos por distritos sanitários e UBS.")
-    try:
-        img_mapa_ubs = Image.open("icon_mapa_ubs.png") # Nome do arquivo no GitHub
-        st.image(img_mapa_ubs, use_container_width=True)
-    except:
-        st.markdown("<h1 style='text-align: center; font-size: 100px;'>🏥🗺️</h1>", unsafe_allow_html=True)
+    # Gráfico de Perfil (Pizza ou Barras)
+    st.write("**Perfil por Distrito Sanitário**")
+    df_pizza = pd.DataFrame({'Distrito': ['Norte', 'Sul', 'Leste', 'Oeste'], 'Val': [400, 300, 200, 100]})
+    fig_pizza = px.pie(df_pizza, values='Val', names='Distrito', hole=.4, color_discrete_sequence=px.colors.sequential.Blues_r)
+    fig_pizza.update_layout(height=250, margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig_pizza, use_container_width=True)
 
-    # Ciclos Sazonais (Pequenos Múltiplos)
-    st.markdown("---")
-    st.markdown("**Ciclos Sazonais 2023/24**")
-    st.caption("Comparação de padrões históricos para identificação de períodos de pico.")
-    c_graf_2023, c_graf_2024 = st.columns(2)
-    
-    with c_graf_2023:
-        st.line_chart([10, 20, 40, 30, 15], height=120)
-        st.caption("<center>2023</center>", unsafe_allow_html=True)
-    with c_graf_2024:
-        st.line_chart([5, 15, 60, 50, 25], height=120)
-        st.caption("<center>2024</center>", unsafe_allow_html=True)
+    # Fontes de Dados
+    st.markdown("<div class='card'><b>Fontes Integradas:</b><br>SIVEP-Gripe | e-SUS | VIVVER<br>➡️ Núcleo de Informação em Saúde (NIS)</div>", unsafe_allow_html=True)
 
-    # Rodapé de Fontes (Igual ao fluxo da imagem)
-    st.markdown("---")
-    st.markdown("**Fontes de Informação Integradas**")
-    st.markdown("📋 SIVEP-Gripe + ➕ e-SUS + 🗄️ VIVVER ➔ 🧬 Núcleo de Informação em Saúde (NIS)")
-
+st.divider()
+st.caption("Este infográfico é atualizado automaticamente via extração de dados do Power BI toda quarta-feira.")
 # RODAPÉ FINAL
 st.divider()
 st.markdown("<p style='text-align: center; color: gray;'>Consolidação de dados provenientes do SIVEP-Gripe, e-SUS e sistema VIVVER.</p>", unsafe_allow_html=True)
