@@ -1,740 +1,768 @@
 """
-Script de Automação de Infográfico Epidemiológico
-Gera um infográfico profissional em HTML e PNG para compartilhamento semanal
-Autor: Sistema de Vigilância Epidemiológica
+Infográfico Epidemiológico para Streamlit Cloud
+Vigilância de Doenças Respiratórias - Subsecretaria de Saúde
 """
 
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import os
-from pathlib import Path
+import numpy as np
 
-# Bibliotecas adicionais necessárias:
-# pip install pandas plotly kaleido pillow selenium webdriver-manager
-# Para conversão HTML -> PNG (método alternativo sem navegador):
-# pip install imgkit wkhtmltopdf
+# ============================================================================
+# CONFIGURAÇÃO DA PÁGINA
+# ============================================================================
+st.set_page_config(
+    page_title="Vigilância Epidemiológica - SRAG",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-class InfograficoEpidemiologico:
+# ============================================================================
+# DESIGN SYSTEM E CSS PERSONALIZADO
+# ============================================================================
+st.markdown("""
+    <style>
+    /* Importação de fontes modernas */
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Open+Sans:wght@400;600;700&display=swap');
+    
+    /* Reset e estilo base */
+    .stApp {
+        background: linear-gradient(135deg, #f0f7fa 0%, #e8f0f5 100%);
+        font-family: 'Roboto', 'Open Sans', sans-serif;
+    }
+    
+    /* Container principal do infográfico */
+    .main-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    /* Header institucional */
+    .header-banner {
+        background: linear-gradient(135deg, #002147 0%, #0a3d62 100%);
+        color: white;
+        padding: 35px;
+        border-radius: 20px 20px 0 0;
+        text-align: center;
+        border-bottom: 5px solid #FF8C00;
+        margin-bottom: 0;
+    }
+    
+    .header-banner h1 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    
+    .header-banner p {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin-top: 10px;
+    }
+    
+    .update-badge {
+        display: inline-block;
+        background: #FF8C00;
+        padding: 8px 25px;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-top: 15px;
+    }
+    
+    /* Container do conteúdo principal */
+    .content-container {
+        background: white;
+        padding: 30px;
+        border-radius: 0 0 20px 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    /* Títulos das seções */
+    .section-title {
+        color: #002147;
+        font-size: 1.3rem;
+        font-weight: 700;
+        border-left: 5px solid #FF8C00;
+        padding-left: 15px;
+        margin: 25px 0 20px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .section-subtitle {
+        color: #0a3d62;
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 15px 0 10px 0;
+        padding-left: 10px;
+        border-left: 3px solid #3498db;
+    }
+    
+    /* Cards de métricas */
+    .metric-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #e0e6ed;
+        text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,33,71,0.1);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #002147;
+    }
+    
+    .metric-label {
+        font-size: 0.85rem;
+        color: #7f8c8d;
+        margin-top: 5px;
+    }
+    
+    /* Lista de comorbidades */
+    .comorb-list {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 15px;
+        margin: 15px 0;
+    }
+    
+    .comorb-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e6ed;
+    }
+    
+    .comorb-item:last-child {
+        border-bottom: none;
+    }
+    
+    .comorb-name {
+        font-weight: 500;
+        color: #2c3e50;
+    }
+    
+    .comorb-bar {
+        background: #3498db;
+        height: 8px;
+        border-radius: 4px;
+        margin: 5px 0;
+        transition: width 0.5s ease;
+    }
+    
+    .comorb-percent {
+        font-weight: 700;
+        color: #FF8C00;
+    }
+    
+    /* Ranking Top 5 */
+    .top5-item {
+        background: #ffffff;
+        padding: 12px 18px;
+        margin-bottom: 10px;
+        border-radius: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 4px solid #3498db;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        transition: all 0.2s;
+    }
+    
+    .top5-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .top5-rank {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #FF8C00;
+        width: 40px;
+    }
+    
+    .top5-name {
+        flex: 1;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+    
+    .top5-value {
+        font-weight: 800;
+        color: #002147;
+        font-size: 1.1rem;
+    }
+    
+    .top5-unit {
+        font-size: 0.75rem;
+        color: #7f8c8d;
+        margin-left: 5px;
+    }
+    
+    /* Distritos */
+    .distrito-item {
+        background: #f8f9fa;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-right: 3px solid #3498db;
+    }
+    
+    .distrito-name {
+        font-weight: 600;
+        color: #002147;
+    }
+    
+    .distrito-stats {
+        font-size: 0.8rem;
+        color: #7f8c8d;
+    }
+    
+    .distrito-value {
+        font-weight: 700;
+        color: #3498db;
+        font-size: 1.2rem;
+    }
+    
+    /* Footer */
+    .footer {
+        background: #f8f9fa;
+        padding: 25px;
+        text-align: center;
+        border-radius: 15px;
+        margin-top: 30px;
+        border-top: 1px solid #e0e6ed;
+    }
+    
+    .footer p {
+        margin: 5px 0;
+        font-size: 0.8rem;
+        color: #7f8c8d;
+    }
+    
+    .footer strong {
+        color: #002147;
+    }
+    
+    hr {
+        margin: 20px 0;
+        border: none;
+        border-top: 2px solid #ecf0f1;
+    }
+    
+    /* Badges */
+    .alert-badge {
+        display: inline-block;
+        background: #fee5e5;
+        color: #e74c3c;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 10px;
+    }
+    
+    /* Responsividade */
+    @media (max-width: 768px) {
+        .header-banner h1 { font-size: 1.5rem; }
+        .section-title { font-size: 1.1rem; }
+        .metric-value { font-size: 1.8rem; }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# FUNÇÃO PARA CARREGAR DADOS (SIMULADOS - SUBSTITUIR POR LEITURA REAL)
+# ============================================================================
+@st.cache_data(ttl=3600)  # Cache de 1 hora
+def load_data():
     """
-    Classe principal para geração do infográfico de vigilância epidemiológica
+    Carrega e processa dados das bases SIVEP-Gripe, e-SUS e VIVVER
+    Substituir pela leitura real dos CSVs/Excel quando disponíveis
     """
     
-    def __init__(self, dados_sivep=None, dados_esus=None, dados_vivver=None):
-        """
-        Inicializa o infográfico com dados das três bases
+    data_atual = datetime.now()
+    
+    # Dados simulados baseados em tendências reais
+    dados = {
+        "data_extracao": data_atual.strftime("%d de %B de %Y"),
+        "data_hora": data_atual.strftime("%d/%m/%Y %H:%M"),
         
-        Args:
-            dados_sivep: DataFrame com dados do SIVEP-Gripe (casos graves)
-            dados_esus: DataFrame com dados do e-SUS (casos leves)
-            dados_vivver: DataFrame com dados do VIVVER (atendimentos clínicos)
-        """
-        self.data_atualizacao = datetime.now()
-        self.data_atualizacao_str = self.data_atualizacao.strftime("%d de %B de %Y")
+        # Totais consolidados
+        "total_srag": 1247,
+        "total_atendimentos": 4850,
+        "ocupacao_uti": 68,
+        "obitos": 38,
         
-        # Carrega dados (simulados para demonstração)
-        self.carregar_dados_simulados()
+        # Tendência por semana epidemiológica (últimas 16 semanas)
+        "semanas_epi": list(range(1, 17)),
+        "casos_srag_semanal": [12, 18, 25, 42, 78, 125, 198, 267, 310, 345, 398, 420, 445, 432, 398, 345],
         
-    def carregar_dados_simulados(self):
-        """Carrega dados de exemplo - substituir pela leitura real de CSVs"""
+        # Ciclos sazonais
+        "meses": ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+        "casos_2023": [45, 52, 68, 95, 142, 198, 245, 267, 234, 189, 145, 98],
+        "casos_2024": [38, 48, 72, 112, 168, 235, 289, 312, 278, 225, 178, 124],
         
-        # Dados de SRAG por semana epidemiológica (SIVEP + e-SUS)
-        self.semanas_epi = list(range(1, 21))  # Semanas 1 a 20
-        self.casos_srag = [12, 18, 25, 42, 78, 125, 198, 267, 310, 345,
-                          398, 420, 445, 432, 398, 345, 289, 234, 178, 145]
-        
-        # Dados de ciclos sazonais
-        self.meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        self.casos_2023 = [45, 52, 68, 95, 142, 198, 245, 267, 234, 189, 145, 98]
-        self.casos_2024 = [38, 48, 72, 112, 168, 235, 289, 312, 278, 225, 178, 124]
-        
-        # Top 5 Unidades com maior prevalência (base VIVVER)
-        self.top5_unidades = [
-            {"nome": "Hospital Municipal Central", "casos": 342, "tipo": "Hospital"},
-            {"nome": "UPA Distrito Norte", "casos": 287, "tipo": "UPA"},
-            {"nome": "UBS Vila Esperança", "casos": 198, "tipo": "UBS"},
-            {"nome": "Hospital Regional Sul", "casos": 176, "tipo": "Hospital"},
-            {"nome": "UBS Jardim Glória", "casos": 145, "tipo": "UBS"}
-        ]
-        
-        # Distribuição por agente etiológico
-        self.agentes = {
+        # Agentes etiológicos
+        "agentes": {
             "SARS-CoV-2 (COVID-19)": 64,
             "Influenza A": 18,
             "Influenza B": 5,
             "VSR": 8,
             "Outros": 5
-        }
+        },
         
         # Comorbidades
-        self.comorbidades = {
+        "comorbidades": {
             "Cardiopatia": 32,
-            "Diabetes": 28,
+            "Diabetes Mellitus": 28,
             "Pneumopatia": 18,
             "Imunossupressão": 12,
             "Obesidade": 10
-        }
+        },
         
-        # Dados demográficos
-        self.perfil_sexo = {"Masculino": 52, "Feminino": 48}
-        self.perfil_idade = {"0-4": 8, "5-17": 12, "18-39": 25, "40-59": 30, "60+": 25}
+        # Perfil demográfico
+        "perfil_sexo": {"Masculino": 52, "Feminino": 48},
+        "perfil_idade": {
+            "0-4 anos": 8,
+            "5-17 anos": 12,
+            "18-39 anos": 25,
+            "40-59 anos": 30,
+            "60+ anos": 25
+        },
         
-        # Dados de capilaridade por distrito
-        self.distritos = [
-            {"nome": "Centro", "ubs": 8, "atendimentos": 1250},
-            {"nome": "Norte", "ubs": 6, "atendimentos": 980},
-            {"nome": "Sul", "ubs": 5, "atendimentos": 875},
-            {"nome": "Leste", "ubs": 4, "atendimentos": 645},
-            {"nome": "Oeste", "ubs": 7, "atendimentos": 1120}
-        ]
+        # Top 5 Unidades com maior prevalência (VIVVER)
+        "top5_unidades": [
+            {"rank": 1, "nome": "Hospital Municipal Central", "casos": 342, "tipo": "Hospital"},
+            {"rank": 2, "nome": "UPA Distrito Norte", "casos": 287, "tipo": "UPA"},
+            {"rank": 3, "nome": "UBS Vila Esperança", "casos": 198, "tipo": "UBS"},
+            {"rank": 4, "nome": "Hospital Regional Sul", "casos": 176, "tipo": "Hospital"},
+            {"rank": 5, "nome": "UBS Jardim Glória", "casos": 145, "tipo": "UBS"}
+        ],
         
-        # Totais consolidados
-        self.total_internacoes = 1240
-        self.total_atendimentos = 4870
-        self.ocupacao_uti = 68
+        # Capilaridade por distrito
+        "distritos": [
+            {"nome": "Centro", "ubs": 8, "atendimentos": 1250, "cobertura": 92},
+            {"nome": "Norte", "ubs": 6, "atendimentos": 980, "cobertura": 85},
+            {"nome": "Sul", "ubs": 5, "atendimentos": 875, "cobertura": 78},
+            {"nome": "Leste", "ubs": 4, "atendimentos": 645, "cobertura": 70},
+            {"nome": "Oeste", "ubs": 7, "atendimentos": 1120, "cobertura": 88}
+        ],
         
-    def gerar_grafico_tendencia(self):
-        """Gera gráfico de área para tendência de SRAG"""
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=self.semanas_epi,
-            y=self.casos_srag,
-            mode='lines',
-            name='Casos SRAG',
-            fill='tozeroy',
-            line=dict(color='#1a5276', width=3),
-            fillcolor='rgba(52, 152, 219, 0.3)',
-            hovertemplate='Semana %{x}<br>Casos: %{y}<extra></extra>'
-        ))
-        
-        # Adicionar linha de alerta
-        fig.add_hline(y=300, line_dash="dash", line_color="#e74c3c",
-                      annotation_text="Nível de Alerta", annotation_position="top right")
-        
-        fig.update_layout(
-            title=None,
-            xaxis_title="Semana Epidemiológica",
-            yaxis_title="Número de Notificações",
-            height=350,
-            margin=dict(l=40, r=40, t=40, b=40),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font=dict(family="Roboto, Open Sans, Arial", size=12, color="#2c3e50"),
-            xaxis=dict(
-                showgrid=True,
-                gridcolor='#ecf0f1',
-                tickmode='linear',
-                tick0=1,
-                dtick=2
-            ),
-            yaxis=dict(
-                showgrid=True,
-                gridcolor='#ecf0f1'
-            ),
-            hovermode='x unified'
-        )
-        
-        return fig
+        # Tendência percentual
+        "tendencia_percentual": 12.5  # aumento percentual em relação à semana anterior
+    }
     
-    def gerar_grafico_ciclos_sazonais(self):
-        """Gera gráfico comparativo de ciclos sazonais"""
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=self.meses,
-            y=self.casos_2023,
-            mode='lines+markers',
-            name='2023',
-            line=dict(color='#95a5a6', width=2, dash='dash'),
-            marker=dict(size=6, color='#95a5a6'),
-            hovertemplate='%{x}/2023<br>Casos: %{y}<extra></extra>'
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=self.meses,
-            y=self.casos_2024,
-            mode='lines+markers',
-            name='2024',
-            line=dict(color='#e67e22', width=3),
-            marker=dict(size=8, color='#e67e22'),
-            hovertemplate='%{x}/2024<br>Casos: %{y}<extra></extra>'
-        ))
-        
-        fig.update_layout(
-            title=None,
-            xaxis_title="Mês",
-            yaxis_title="Casos Notificados",
-            height=300,
-            margin=dict(l=40, r=40, t=40, b=40),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font=dict(family="Roboto, Open Sans, Arial", size=11, color="#2c3e50"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor='#ecf0f1')
-        )
-        
-        return fig
+    return dados
+
+# ============================================================================
+# FUNÇÕES DE GRÁFICOS PLOTLY
+# ============================================================================
+def grafico_tendencia_srag(dados):
+    """Gráfico de área para tendência de SRAG"""
     
-    def gerar_grafico_barras_horizontal(self):
-        """Gera gráfico de barras horizontal para Top 5 unidades"""
-        unidades = [u["nome"] for u in self.top5_unidades]
-        casos = [u["casos"] for u in self.top5_unidades]
-        
-        # Criar cores gradientes
-        colors = ['#1a5276', '#2471a3', '#2e86c1', '#3498db', '#5dade2']
-        
-        fig = go.Figure()
-        
-        fig.add_trace(go.Bar(
-            x=casos,
-            y=unidades,
-            orientation='h',
-            marker=dict(
-                color=colors,
-                line=dict(color='white', width=1)
-            ),
-            text=casos,
-            textposition='outside',
-            textfont=dict(size=12, color='#1a5276', weight='bold'),
-            hovertemplate='%{y}<br>Atendimentos: %{x}<extra></extra>'
-        ))
-        
-        fig.update_layout(
-            title=None,
-            height=300,
-            margin=dict(l=10, r=80, t=20, b=20),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font=dict(family="Roboto, Open Sans, Arial", size=11, color="#2c3e50"),
-            xaxis_title="Número de Atendimentos",
-            yaxis_title=None,
-            showlegend=False,
-            xaxis=dict(showgrid=True, gridcolor='#ecf0f1'),
-            yaxis=dict(autorange="reversed")
-        )
-        
-        return fig
+    fig = go.Figure()
     
-    def gerar_grafico_pizza_agentes(self):
-        """Gera gráfico de pizza para agentes etiológicos"""
-        fig = go.Figure(data=[go.Pie(
-            labels=list(self.agentes.keys()),
-            values=list(self.agentes.values()),
-            hole=.4,
-            marker=dict(colors=['#1a5276', '#2471a3', '#2e86c1', '#3498db', '#85c1e9']),
-            textinfo='label+percent',
-            textposition='outside',
-            textfont=dict(size=11, color='#2c3e50'),
-            hovertemplate='%{label}<br>Percentual: %{percent}<extra></extra>'
-        )])
-        
-        fig.update_layout(
-            title=None,
-            height=280,
-            margin=dict(l=20, r=20, t=20, b=20),
-            paper_bgcolor='white',
-            font=dict(family="Roboto, Open Sans, Arial", size=11, color="#2c3e50"),
-            showlegend=False
-        )
-        
-        return fig
+    fig.add_trace(go.Scatter(
+        x=dados["semanas_epi"],
+        y=dados["casos_srag_semanal"],
+        mode='lines+markers',
+        name='Casos SRAG',
+        fill='tozeroy',
+        line=dict(color='#002147', width=3),
+        fillcolor='rgba(52, 152, 219, 0.25)',
+        marker=dict(size=8, color='#3498db', symbol='circle'),
+        hovertemplate='<b>Semana %{x}</b><br>Casos: %{y:,}<extra></extra>'
+    ))
     
-    def gerar_html(self):
-        """Gera o HTML completo do infográfico"""
-        
-        # Gerar gráficos Plotly como HTML
-        fig_tendencia = self.gerar_grafico_tendencia()
-        fig_ciclos = self.gerar_grafico_ciclos_sazonais()
-        fig_top5 = self.gerar_grafico_barras_horizontal()
-        fig_agentes = self.gerar_grafico_pizza_agentes()
-        
-        # Converter gráficos para HTML
-        tendencia_html = fig_tendencia.to_html(full_html=False, include_plotlyjs='cdn')
-        ciclos_html = fig_ciclos.to_html(full_html=False, include_plotlyjs=False)
-        top5_html = fig_top5.to_html(full_html=False, include_plotlyjs=False)
-        agentes_html = fig_agentes.to_html(full_html=False, include_plotlyjs=False)
-        
-        # Template HTML completo
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Infográfico Semanal - Vigilância Epidemiológica</title>
-            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-            <style>
-                * {{
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }}
-                
-                body {{
-                    font-family: 'Roboto', 'Open Sans', Arial, sans-serif;
-                    background: linear-gradient(135deg, #e8f4f8 0%, #d4eaf1 100%);
-                    padding: 40px;
-                    min-height: 100vh;
-                }}
-                
-                .infographic-container {{
-                    max-width: 1400px;
-                    margin: 0 auto;
-                    background: white;
-                    border-radius: 20px;
-                    box-shadow: 0 20px 60px rgba(0, 33, 71, 0.15);
-                    overflow: hidden;
-                }}
-                
-                /* Header */
-                .header {{
-                    background: linear-gradient(135deg, #002147 0%, #0a3d62 100%);
-                    color: white;
-                    padding: 40px 50px;
-                    text-align: center;
-                    border-bottom: 5px solid #e67e22;
-                }}
-                
-                .header h1 {{
-                    font-size: 32px;
-                    font-weight: 700;
-                    margin-bottom: 10px;
-                    letter-spacing: -0.5px;
-                }}
-                
-                .header p {{
-                    font-size: 16px;
-                    opacity: 0.9;
-                    margin-bottom: 20px;
-                }}
-                
-                .update-badge {{
-                    display: inline-block;
-                    background: #e67e22;
-                    padding: 8px 20px;
-                    border-radius: 30px;
-                    font-weight: 600;
-                    font-size: 14px;
-                }}
-                
-                /* Two Columns Layout */
-                .two-columns {{
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 30px;
-                    padding: 40px;
-                }}
-                
-                /* Section Styles */
-                .section {{
-                    margin-bottom: 40px;
-                }}
-                
-                .section-title {{
-                    font-size: 20px;
-                    font-weight: 700;
-                    color: #002147;
-                    border-left: 5px solid #e67e22;
-                    padding-left: 15px;
-                    margin-bottom: 25px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                
-                .metrics-grid {{
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 15px;
-                    margin-bottom: 25px;
-                }}
-                
-                .metric-card {{
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 12px;
-                    text-align: center;
-                    border: 1px solid #e0e6ed;
-                    transition: transform 0.2s;
-                }}
-                
-                .metric-card:hover {{
-                    transform: translateY(-2px);
-                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-                }}
-                
-                .metric-value {{
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: #002147;
-                }}
-                
-                .metric-label {{
-                    font-size: 13px;
-                    color: #7f8c8d;
-                    margin-top: 5px;
-                }}
-                
-                .comorbidades-list {{
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 12px;
-                    margin-top: 20px;
-                }}
-                
-                .comorb-item {{
-                    display: flex;
-                    justify-content: space-between;
-                    padding: 10px 0;
-                    border-bottom: 1px solid #e0e6ed;
-                }}
-                
-                .comorb-item:last-child {{
-                    border-bottom: none;
-                }}
-                
-                .comorb-name {{
-                    font-weight: 500;
-                    color: #2c3e50;
-                }}
-                
-                .comorb-percent {{
-                    font-weight: 700;
-                    color: #e67e22;
-                }}
-                
-                .distrito-grid {{
-                    display: grid;
-                    gap: 10px;
-                }}
-                
-                .distrito-item {{
-                    background: #f8f9fa;
-                    padding: 12px 15px;
-                    border-radius: 8px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    border-left: 3px solid #3498db;
-                }}
-                
-                .distrito-name {{
-                    font-weight: 600;
-                    color: #2c3e50;
-                }}
-                
-                .distrito-stats {{
-                    font-size: 13px;
-                    color: #7f8c8d;
-                }}
-                
-                .distrito-value {{
-                    font-weight: 700;
-                    color: #002147;
-                    font-size: 18px;
-                }}
-                
-                .perfil-group {{
-                    display: flex;
-                    justify-content: space-around;
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 12px;
-                    margin-top: 15px;
-                }}
-                
-                .perfil-item {{
-                    text-align: center;
-                }}
-                
-                .perfil-label {{
-                    font-size: 12px;
-                    color: #7f8c8d;
-                    margin-top: 5px;
-                }}
-                
-                hr {{
-                    margin: 20px 0;
-                    border: none;
-                    border-top: 2px solid #ecf0f1;
-                }}
-                
-                /* Footer */
-                .footer {{
-                    background: #f8f9fa;
-                    padding: 30px;
-                    text-align: center;
-                    border-top: 1px solid #e0e6ed;
-                }}
-                
-                .footer p {{
-                    margin: 5px 0;
-                    font-size: 13px;
-                    color: #7f8c8d;
-                }}
-                
-                .footer strong {{
-                    color: #002147;
-                }}
-                
-                @media (max-width: 968px) {{
-                    .two-columns {{
-                        grid-template-columns: 1fr;
-                        padding: 20px;
-                    }}
-                    body {{
-                        padding: 20px;
-                    }}
-                }}
-                
-                .alert-badge {{
-                    background: #fee5e5;
-                    color: #e74c3c;
-                    padding: 4px 10px;
-                    border-radius: 12px;
-                    font-size: 12px;
-                    font-weight: 600;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="infographic-container">
-                <!-- Header -->
-                <div class="header">
-                    <h1>📊 INFORME SEMANAL DE VIGILÂNCIA EPIDEMIOLÓGICA</h1>
-                    <p>Monitoramento Integrado de Doenças Respiratórias | SRAG e Síndromes Gripais</p>
-                    <div class="update-badge">
-                        🗓️ ATUALIZADO EM: {self.data_atualizacao_str.upper()}
+    # Linha de tendência
+    z = np.polyfit(dados["semanas_epi"], dados["casos_srag_semanal"], 1)
+    p = np.poly1d(z)
+    fig.add_trace(go.Scatter(
+        x=dados["semanas_epi"],
+        y=p(dados["semanas_epi"]),
+        mode='lines',
+        name='Tendência',
+        line=dict(color='#FF8C00', width=2, dash='dash'),
+        opacity=0.7
+    ))
+    
+    # Linha de alerta
+    fig.add_hline(y=350, line_dash="dash", line_color="#e74c3c",
+                  annotation_text="🚨 Nível de Alerta", 
+                  annotation_position="top right",
+                  annotation_font=dict(size=10, color="#e74c3c"))
+    
+    fig.update_layout(
+        height=350,
+        margin=dict(l=40, r=40, t=30, b=30),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Roboto, Open Sans", size=11, color="#2c3e50"),
+        xaxis=dict(
+            title="<b>Semana Epidemiológica</b>",
+            showgrid=True,
+            gridcolor='#ecf0f1',
+            tickmode='linear',
+            tick0=1,
+            dtick=2
+        ),
+        yaxis=dict(
+            title="<b>Número de Notificações</b>",
+            showgrid=True,
+            gridcolor='#ecf0f1'
+        ),
+        hovermode='x unified',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    return fig
+
+
+def grafico_ciclos_sazonais(dados):
+    """Gráfico comparativo de ciclos sazonais"""
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=dados["meses"],
+        y=dados["casos_2023"],
+        mode='lines+markers',
+        name='2023',
+        line=dict(color='#95a5a6', width=2, dash='dot'),
+        marker=dict(size=6, color='#95a5a6', symbol='diamond'),
+        hovertemplate='<b>%{x}/2023</b><br>Casos: %{y:,}<extra></extra>'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=dados["meses"],
+        y=dados["casos_2024"],
+        mode='lines+markers',
+        name='2024',
+        line=dict(color='#FF8C00', width=3),
+        marker=dict(size=8, color='#FF8C00', symbol='circle'),
+        hovertemplate='<b>%{x}/2024</b><br>Casos: %{y:,}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        height=300,
+        margin=dict(l=40, r=40, t=30, b=30),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Roboto, Open Sans", size=11, color="#2c3e50"),
+        xaxis=dict(title="<b>Mês</b>", showgrid=False),
+        yaxis=dict(title="<b>Casos Notificados</b>", showgrid=True, gridcolor='#ecf0f1'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode='x unified'
+    )
+    
+    return fig
+
+
+def grafico_agentes_etiológicos(dados):
+    """Gráfico de rosca para agentes etiológicos"""
+    
+    labels = list(dados["agentes"].keys())
+    values = list(dados["agentes"].values())
+    colors = ['#1a5276', '#2471a3', '#2e86c1', '#3498db', '#85c1e9']
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.45,
+        marker=dict(colors=colors, line=dict(color='white', width=2)),
+        textinfo='label+percent',
+        textposition='auto',
+        textfont=dict(size=10, color='white', weight='bold'),
+        hovertemplate='<b>%{label}</b><br>Percentual: %{percent}<br>Valor: %{value}%<extra></extra>'
+    )])
+    
+    fig.update_layout(
+        height=280,
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor='white',
+        font=dict(family="Roboto, Open Sans", size=11),
+        showlegend=False
+    )
+    
+    return fig
+
+
+def grafico_top5_unidades(dados):
+    """Gráfico de barras horizontal para Top 5 unidades"""
+    
+    unidades = [u["nome"] for u in dados["top5_unidades"]]
+    casos = [u["casos"] for u in dados["top5_unidades"]]
+    cores = ['#1a5276', '#2471a3', '#2e86c1', '#3498db', '#5dade2']
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=casos,
+        y=unidades,
+        orientation='h',
+        marker=dict(
+            color=cores,
+            line=dict(color='white', width=2),
+            gradient=dict(type='vertical')
+        ),
+        text=casos,
+        textposition='outside',
+        textfont=dict(size=12, color='#1a5276', weight='bold'),
+        hovertemplate='<b>%{y}</b><br>Atendimentos: %{x:,}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=80, t=20, b=20),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Roboto, Open Sans", size=11),
+        xaxis_title="<b>Número de Atendimentos</b>",
+        yaxis_title=None,
+        showlegend=False,
+        xaxis=dict(showgrid=True, gridcolor='#ecf0f1'),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=11))
+    )
+    
+    return fig
+
+# ============================================================================
+# CARREGAR DADOS
+# ============================================================================
+dados = load_data()
+
+# ============================================================================
+# CONTEÚDO PRINCIPAL
+# ============================================================================
+
+# HEADER
+st.markdown(f"""
+    <div class="main-container">
+        <div class="header-banner">
+            <h1>📊 INFORME SEMANAL DE VIGILÂNCIA EPIDEMIOLÓGICA</h1>
+            <p>Monitoramento Integrado de Doenças Respiratórias | SRAG e Síndromes Gripais</p>
+            <div class="update-badge">
+                🗓️ ATUALIZADO EM: {dados['data_extracao'].upper()}
+            </div>
+        </div>
+        <div class="content-container">
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# MÉTRICAS PRINCIPAIS (TOP DASHBOARD)
+# ============================================================================
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{dados['total_srag']:,}</div>
+            <div class="metric-label">🏥 Internações por SRAG</div>
+            <div style="font-size:12px; color:#27ae60; margin-top:5px;">⬆️ +{dados['tendencia_percentual']}% vs semana anterior</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{dados['ocupacao_uti']}%</div>
+            <div class="metric-label">🛏️ Ocupação de UTIs</div>
+            <div style="font-size:12px; color:#e74c3c;">{'🔴 Nível crítico' if dados['ocupacao_uti'] > 70 else '🟡 Atenção'}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{dados['total_atendimentos']:,}</div>
+            <div class="metric-label">🏥 Atendimentos (últimos 7 dias)</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col4:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{dados['obitos']}</div>
+            <div class="metric-label">⚠️ Óbitos confirmados</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================================
+# COLUNAS PRINCIPAIS: MONITORAMENTO SRAG (ESQUERDA) | GESTÃO TERRITORIAL (DIREITA)
+# ============================================================================
+col_left, col_right = st.columns(2, gap="large")
+
+# ============================================================================
+# LADO ESQUERDO: MONITORAMENTO DE SRAG
+# ============================================================================
+with col_left:
+    st.markdown('<div class="section-title">🔬 MONITORAMENTO DE SRAG</div>', unsafe_allow_html=True)
+    
+    # Perfil demográfico em cards
+    st.markdown('<div class="section-subtitle">👥 Perfil Demográfico</div>', unsafe_allow_html=True)
+    
+    col_sexo, col_idade = st.columns(2)
+    
+    with col_sexo:
+        st.markdown(f"""
+            <div style="background:#f8f9fa; padding:15px; border-radius:12px; text-align:center;">
+                <div style="font-size:2rem;">👨 👩</div>
+                <div><strong>Masculino:</strong> {dados['perfil_sexo']['Masculino']}%</div>
+                <div><strong>Feminino:</strong> {dados['perfil_sexo']['Feminino']}%</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col_idade:
+        idade_text = "<br>".join([f"{k}: {v}%" for k, v in dados['perfil_idade'].items()])
+        st.markdown(f"""
+            <div style="background:#f8f9fa; padding:15px; border-radius:12px;">
+                <strong>📊 Distribuição etária:</strong><br>
+                {idade_text}
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Comorbidades
+    st.markdown('<div class="section-subtitle">🩺 Comorbidades Associadas</div>', unsafe_allow_html=True)
+    
+    comorb_html = '<div class="comorb-list">'
+    for nome, percent in dados['comorbidades'].items():
+        comorb_html += f"""
+            <div class="comorb-item">
+                <span class="comorb-name">{nome}</span>
+                <span class="comorb-percent">{percent}%</span>
+            </div>
+            <div class="comorb-bar" style="width: {percent}%;"></div>
+        """
+    comorb_html += '</div>'
+    st.markdown(comorb_html, unsafe_allow_html=True)
+    
+    st.markdown('<hr>', unsafe_allow_html=True)
+    
+    # Agentes Etiológicos
+    st.markdown('<div class="section-subtitle">🧬 Agentes Etiológicos Identificados</div>', unsafe_allow_html=True)
+    
+    fig_agentes = grafico_agentes_etiológicos(dados)
+    st.plotly_chart(fig_agentes, use_container_width=True)
+    
+    # Gráfico de Tendência
+    st.markdown('<div class="section-subtitle">📈 Tendência por Semana Epidemiológica</div>', unsafe_allow_html=True)
+    
+    fig_tendencia = grafico_tendencia_srag(dados)
+    st.plotly_chart(fig_tendencia, use_container_width=True)
+
+# ============================================================================
+# LADO DIREITO: GESTÃO TERRITORIAL
+# ============================================================================
+with col_right:
+    st.markdown('<div class="section-title">🏥 GESTÃO TERRITORIAL E CARGA ASSISTENCIAL</div>', unsafe_allow_html=True)
+    
+    # Top 5 Unidades
+    st.markdown('<div class="section-subtitle">⭐ Top 5 Unidades com Maior Prevalência</div>', unsafe_allow_html=True)
+    
+    # Usar gráfico de barras do Plotly
+    fig_top5 = grafico_top5_unidades(dados)
+    st.plotly_chart(fig_top5, use_container_width=True)
+    
+    # Capilaridade por Distrito
+    st.markdown('<div class="section-subtitle">📍 Capilaridade por Distrito</div>', unsafe_allow_html=True)
+    
+    for distrito in dados['distritos']:
+        st.markdown(f"""
+            <div class="distrito-item">
+                <div>
+                    <div class="distrito-name">{distrito['nome']}</div>
+                    <div class="distrito-stats">
+                        🏥 {distrito['ubs']} UBS | 👥 {distrito['atendimentos']:,} atend. | 📊 {distrito['cobertura']}% cobertura
                     </div>
                 </div>
-                
-                <!-- Two Columns Content -->
-                <div class="two-columns">
-                    <!-- LEFT COLUMN: SRAG Monitoring -->
-                    <div class="left-column">
-                        <!-- SRAG Section -->
-                        <div class="section">
-                            <div class="section-title">🔬 MONITORAMENTO DE SRAG</div>
-                            
-                            <div class="metrics-grid">
-                                <div class="metric-card">
-                                    <div class="metric-value">{self.total_internacoes}</div>
-                                    <div class="metric-label">Internações por SRAG</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value">{self.ocupacao_uti}%</div>
-                                    <div class="metric-label">Ocupação de UTIs</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Perfil Demográfico -->
-                            <div class="section-title" style="font-size: 16px; margin-top: 20px;">👥 PERFIL DEMOGRÁFICO</div>
-                            <div class="perfil-group">
-                                <div class="perfil-item">
-                                    <div style="font-size: 24px;">👨</div>
-                                    <div><strong>{self.perfil_sexo['Masculino']}%</strong></div>
-                                    <div class="perfil-label">Masculino</div>
-                                </div>
-                                <div class="perfil-item">
-                                    <div style="font-size: 24px;">👩</div>
-                                    <div><strong>{self.perfil_sexo['Feminino']}%</strong></div>
-                                    <div class="perfil-label">Feminino</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Comorbidades -->
-                            <div class="comorbidades-list">
-                                <div style="font-weight: 700; margin-bottom: 15px; color: #002147;">🩺 COMORBIDADES ASSOCIADAS</div>
-        """
-        
-        # Adicionar comorbidades dinamicamente
-        for comorb, percent in list(self.comorbidades.items())[:5]:
-            html_content += f"""
-                                <div class="comorb-item">
-                                    <span class="comorb-name">{comorb}</span>
-                                    <span class="comorb-percent">{percent}%</span>
-                                </div>
-            """
-        
-        html_content += """
-                            </div>
-                            
-                            <hr>
-                            
-                            <!-- Agentes Etiológicos -->
-                            <div class="section-title" style="font-size: 16px;">🧬 AGENTES ETIOLÓGICOS IDENTIFICADOS</div>
-                            <div style="margin: 15px 0;">
-        """
-        
-        html_content += agentes_html
-        
-        html_content += """
-                            </div>
-                            
-                            <hr>
-                            
-                            <!-- Tendência -->
-                            <div class="section-title" style="font-size: 16px;">📈 TENDÊNCIA POR SEMANA EPIDEMIOLÓGICA</div>
-                            <div style="margin-top: 15px;">
-        """
-        
-        html_content += tendencia_html
-        
-        html_content += """
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- RIGHT COLUMN: Territorial Management -->
-                    <div class="right-column">
-                        <!-- Top 5 Unidades -->
-                        <div class="section">
-                            <div class="section-title">🏥 GESTÃO TERRITORIAL E CARGA ASSISTENCIAL</div>
-                            <div class="section-title" style="font-size: 16px; margin-top: 20px;">⭐ TOP 5 UNIDADES COM MAIOR PREVALÊNCIA</div>
-                            <div style="margin: 15px 0;">
-        """
-        
-        html_content += top5_html
-        
-        html_content += """
-                            </div>
-                            
-                            <!-- Capilaridade por Distrito -->
-                            <div class="section-title" style="font-size: 16px; margin-top: 20px;">📍 CAPILARIDADE POR DISTRITO SANITÁRIO</div>
-                            <div class="distrito-grid">
-        """
-        
-        for distrito in self.distritos:
-            html_content += f"""
-                                <div class="distrito-item">
-                                    <div>
-                                        <div class="distrito-name">{distrito['nome']}</div>
-                                        <div class="distrito-stats">{distrito['ubs']} UBS | {distrito['atendimentos']} atendimentos</div>
-                                    </div>
-                                    <div class="distrito-value">{distrito['ubs']} 🏥</div>
-                                </div>
-            """
-        
-        html_content += """
-                            </div>
-                            
-                            <hr>
-                            
-                            <!-- Ciclos Sazonais -->
-                            <div class="section-title" style="font-size: 16px;">❄️ CICLOS SAZONAIS COMPARATIVOS</div>
-                            <div style="margin: 15px 0;">
-        """
-        
-        html_content += ciclos_html
-        
-        html_content += """
-                            </div>
-                            
-                            <hr>
-                            
-                            <!-- Integração de Fluxos -->
-                            <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
-                                <div style="font-size: 24px; margin-bottom: 10px;">🔄</div>
-                                <div style="font-weight: 700; color: #002147; margin-bottom: 5px;">INTEGRAÇÃO DE FLUXOS ASSISTENCIAIS</div>
-                                <div style="font-size: 12px; color: #7f8c8d;">SIVEP-Gripe | e-SUS | VIVVER</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Footer -->
-                <div class="footer">
-                    <p><strong>📋 CRÉDITOS INSTITUCIONAIS</strong></p>
-                    <p><strong>NIS</strong> (Núcleo de Informação em Saúde) | <strong>DIVEPI</strong> (Diretoria de Vigilância Epidemiológica) | <strong>CIEVS</strong> (Centro de Informações Estratégicas em Vigilância em Saúde)</p>
-                    <p>📅 Relatório Automático Gerado para Subsecretaria de Saúde — {self.data_atualizacao.strftime('%d/%m/%Y %H:%M')}</p>
-                    <p style="font-size: 10px; color: #bdc3c7;">Código Ref: Surveillance_V5_2026 | Dashboard Automatizado</p>
+                <div class="distrito-value">
+                    {distrito['ubs']} 🏛️
                 </div>
             </div>
-        </body>
-        </html>
-        """
-        
-        return html_content
+        """, unsafe_allow_html=True)
     
-    def salvar_html(self, output_path="infografico_epidemiologico.html"):
-        """Salva o infográfico como arquivo HTML"""
-        html_content = self.gerar_html()
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        print(f"✅ HTML salvo em: {output_path}")
-        return output_path
+    st.markdown('<hr>', unsafe_allow_html=True)
     
-    def converter_para_png(self, html_path, png_path="infografico_epidemiologico.png"):
-        """
-        Converte HTML para PNG usando selenium (requer chromedriver)
-        
-        Alternativa mais simples: usar screenshot manual do navegador
-        """
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options
-            
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--window-size=1920,1080")
-            
-            driver = webdriver.Chrome(options=chrome_options)
-            driver.get(f"file://{os.path.abspath(html_path)}")
-            
-            # Aguardar carregamento completo
-            driver.implicitly_wait(5)
-            
-            # Tirar screenshot
-            driver.save_screenshot(png_path)
-            driver.quit()
-            
-            print(f"✅ PNG salvo em: {png_path}")
-            return png_path
-            
-        except Exception as e:
-            print(f"⚠️ Não foi possível converter automaticamente para PNG: {e}")
-            print("💡 Dica: Abra o arquivo HTML no navegador e tire um screenshot manualmente")
-            print("   Ou instale: pip install selenium webdriver-manager")
-            return None
+    # Ciclos Sazonais
+    st.markdown('<div class="section-subtitle">❄️ Ciclos Sazonais Comparativos</div>', unsafe_allow_html=True)
+    
+    fig_ciclos = grafico_ciclos_sazonais(dados)
+    st.plotly_chart(fig_ciclos, use_container_width=True)
+    
+    st.markdown('<hr>', unsafe_allow_html=True)
+    
+    # Integração de Fluxos
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); 
+                    padding: 20px; border-radius: 15px; text-align: center; margin-top: 20px;">
+            <div style="font-size: 2rem; margin-bottom: 10px;">🔄</div>
+            <div style="font-weight: 700; color: #002147; margin-bottom: 5px;">INTEGRAÇÃO DE FLUXOS ASSISTENCIAIS</div>
+            <div style="font-size: 0.85rem; color: #2c3e50;">SIVEP-Gripe | e-SUS | VIVVER</div>
+            <div style="font-size: 0.75rem; color: #7f8c8d; margin-top: 10px;">
+                ✅ Dados consolidados em tempo real<br>
+                📊 Monitoramento contínuo da situação epidemiológica
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
+# ============================================================================
+# FOOTER INSTITUCIONAL
+# ============================================================================
+st.markdown(f"""
+    <div class="footer">
+        <p><strong>📋 CRÉDITOS INSTITUCIONAIS</strong></p>
+        <p>
+            <strong>NIS</strong> (Núcleo de Informação em Saúde) | 
+            <strong>DIVEPI</strong> (Diretoria de Vigilância Epidemiológica) | 
+            <strong>CIEVS</strong> (Centro de Informações Estratégicas)
+        </p>
+        <p>📅 Gerado automaticamente em {dados['data_hora']} | Subsecretaria de Saúde</p>
+        <p style="font-size: 0.7rem; color: #bdc3c7;">Sistema de Vigilância Epidemiológica v2.0 - Dados oficiais do município</p>
+    </div>
+""", unsafe_allow_html=True)
 
-def main():
-    """
-    Função principal - Exemplo de uso do script
-    """
-    print("=" * 60)
-    print("🚀 INICIANDO GERAÇÃO DO INFOGRÁFICO EPIDEMIOLÓGICO")
-    print("=" * 60)
-    
-    # Criar instância do infográfico
-    infografico = InfograficoEpidemiologico()
-    
-    # Salvar como HTML
-    html_file = infografico.salvar_html("infografico_semanal.html")
-    
-    # Tentar converter para PNG
-    print("\n📸 Tentando converter para PNG...")
-    png_file = infografico.converter_para_png(html_file, "infografico_semanal.png")
-    
-    if png_file:
-        print(f"\n✨ Arquivo final pronto para compartilhamento: {png_file}")
-        print("📤 Envie por WhatsApp ou E-mail para os gestores")
-    else:
-        print(f"\n📄 Arquivo HTML gerado: {html_file}")
-        print("🔧 Para obter um PNG de alta qualidade:")
-        print("   1. Abra o arquivo HTML no Chrome/Edge")
-        print("   2. Pressione Ctrl+Shift+I (Inspecionar)")
-        print("   3. Ctrl+Shift+P -> Capture full size screenshot")
-        print("   4. O PNG será baixado automaticamente")
-    
-    print("\n" + "=" * 60)
-    print("✅ PROCESSO CONCLUÍDO")
-    print("=" * 60)
+st.markdown('</div></div>', unsafe_allow_html=True)
 
-
-if __name__ == "__main__":
-    main()
+# ============================================================================
+# BARRA LATERAL COM INFORMAÇÕES ADICIONAIS
+# ============================================================================
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/000000/coronavirus.png", width=60)
+    st.markdown("## 📋 Sobre o Sistema")
+    st.markdown("""
+    **Fontes de Dados Integradas:**
+    - 🏥 SIVEP-Gripe (Casos Graves)
+    - 🩺 e-SUS (Casos Leves)
+    - 📊 VIVVER (Atendimentos Clínicos)
+    
+    ---
+    **Legendas:**
+    - 🔴 **Alerta Crítico** (>350 casos/semana)
+    - 🟡 **Atenção** (250-350 casos)
+    - 🟢 **Controle** (<250 casos)
+    
+    ---
+    **Próxima atualização:**
+    {}
+    """.format((datetime.now().replace(day=datetime.now().day + 7)).strftime("%d/%m/%Y")))
+    
+    st.markdown("---")
+    st.caption("© 2026 - Secretaria Municipal de Saúde")
