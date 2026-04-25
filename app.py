@@ -1,318 +1,77 @@
-"""
-Infográfico Epidemiológico para Streamlit Cloud - VERSÃO CORRIGIDA
-Sem dependências externas problemáticas
-"""
-
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime
-import numpy as np
 
-# Configuração da página
-st.set_page_config(
-    page_title="Vigilância Epidemiológica - SRAG",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(layout="wide")
 
-# ============================================================================
-# CARREGAMENTO DE DADOS
-# ============================================================================
-@st.cache_data(ttl=3600)
-def load_data():
-    """Carrega dados simulados - substituir pela leitura real dos CSVs"""
-    
-    return {
-        "data_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "data_extenso": datetime.now().strftime("%d de %B de %Y"),
-        
-        # Métricas principais
-        "total_srag": 1247,
-        "ocupacao_uti": 68,
-        "total_atendimentos": 4850,
-        "obitos": 38,
-        
-        # Tendência
-        "semanas": list(range(1, 17)),
-        "casos_semanais": [12, 18, 25, 42, 78, 125, 198, 267, 310, 345, 398, 420, 445, 432, 398, 345],
-        
-        # Ciclos sazonais
-        "meses": ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
-        "casos_2023": [45, 52, 68, 95, 142, 198, 245, 267, 234, 189, 145, 98],
-        "casos_2024": [38, 48, 72, 112, 168, 235, 289, 312, 278, 225, 178, 124],
-        
-        # Agentes
-        "agentes": {
-            "COVID-19": 64, "Influenza A": 18, "Influenza B": 5, "VSR": 8, "Outros": 5
-        },
-        
-        # Top 5
-        "top5": [
-            {"nome": "Hospital Municipal Central", "casos": 342},
-            {"nome": "UPA Distrito Norte", "casos": 287},
-            {"nome": "UBS Vila Esperança", "casos": 198},
-            {"nome": "Hospital Regional Sul", "casos": 176},
-            {"nome": "UBS Jardim Glória", "casos": 145}
-        ],
-        
-        # Distritos
-        "distritos": [
-            {"nome": "Centro", "ubs": 8, "atendimentos": 1250},
-            {"nome": "Norte", "ubs": 6, "atendimentos": 980},
-            {"nome": "Sul", "ubs": 5, "atendimentos": 875},
-            {"nome": "Leste", "ubs": 4, "atendimentos": 645},
-            {"nome": "Oeste", "ubs": 7, "atendimentos": 1120}
-        ]
-    }
+# =========================
+# 📥 CARREGAR DADOS
+# =========================
+@st.cache_data
+def load():
+    return pd.read_csv("dados.csv")
 
-# ============================================================================
-# FUNÇÕES DOS GRÁFICOS
-# ============================================================================
-def grafico_tendencia(dados):
-    """Gráfico de área para tendência de SRAG"""
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=dados["semanas"],
-        y=dados["casos_semanais"],
-        mode='lines+markers',
-        name='Casos SRAG',
-        fill='tozeroy',
-        line=dict(color='#002147', width=3),
-        fillcolor='rgba(52, 152, 219, 0.3)',
-        marker=dict(size=8, color='#3498db')
-    ))
-    
-    # Linha de alerta
-    fig.add_hline(y=350, line_dash="dash", line_color="#e74c3c",
-                  annotation_text="🚨 Nível de Alerta", annotation_position="top right")
-    
-    fig.update_layout(
-        height=350,
-        margin=dict(l=40, r=40, t=40, b=40),
-        plot_bgcolor='white',
-        xaxis_title="Semana Epidemiológica",
-        yaxis_title="Número de Notificações",
-        font=dict(family="Arial, sans-serif", size=12)
-    )
-    
-    return fig
+df = load()
+row = df.iloc[-1]
 
-def grafico_ciclos(dados):
-    """Gráfico comparativo de ciclos sazonais"""
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=dados["meses"],
-        y=dados["casos_2023"],
-        mode='lines+markers',
-        name='2023',
-        line=dict(color='#95a5a6', width=2, dash='dash'),
-        marker=dict(size=6, color='#95a5a6')
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=dados["meses"],
-        y=dados["casos_2024"],
-        mode='lines+markers',
-        name='2024',
-        line=dict(color='#FF8C00', width=3),
-        marker=dict(size=8, color='#FF8C00')
-    ))
-    
-    fig.update_layout(
-        height=300,
-        margin=dict(l=40, r=40, t=40, b=40),
-        plot_bgcolor='white',
-        xaxis_title="Mês",
-        yaxis_title="Casos Notificados",
-        font=dict(family="Arial, sans-serif", size=12)
-    )
-    
-    return fig
+# =========================
+# 🧾 HEADER
+# =========================
+st.title("📊 Monitoramento de Síndromes Respiratórias")
 
-# ============================================================================
-# CSS PERSONALIZADO
-# ============================================================================
-st.markdown("""
-    <style>
-    .main-header {
-        background: linear-gradient(135deg, #002147 0%, #0a3d62 100%);
-        padding: 2rem;
-        border-radius: 10px;
-        text-align: center;
-        margin-bottom: 2rem;
-        color: white;
-    }
-    .main-header h1 {
-        margin: 0;
-        font-size: 2rem;
-    }
-    .update-badge {
-        background: #FF8C00;
-        display: inline-block;
-        padding: 0.5rem 1rem;
-        border-radius: 25px;
-        margin-top: 1rem;
-        font-weight: bold;
-    }
-    .section-title {
-        color: #002147;
-        font-size: 1.3rem;
-        font-weight: bold;
-        border-left: 5px solid #FF8C00;
-        padding-left: 1rem;
-        margin: 1.5rem 0 1rem 0;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
-        border: 1px solid #dee2e6;
-        margin: 0.5rem 0;
-    }
-    .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #002147;
-    }
-    .top5-item {
-        background: white;
-        padding: 0.8rem;
-        margin: 0.5rem 0;
-        border-radius: 8px;
-        border-left: 4px solid #3498db;
-        display: flex;
-        justify-content: space-between;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .footer {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        text-align: center;
-        border-radius: 10px;
-        margin-top: 2rem;
-        font-size: 0.8rem;
-        color: #7f8c8d;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# ============================================================================
-# MAIN APP
-# ============================================================================
-dados = load_data()
-
-# HEADER
-st.markdown(f"""
-    <div class="main-header">
-        <h1>📊 INFORME SEMANAL DE VIGILÂNCIA EPIDEMIOLÓGICA</h1>
-        <p>Monitoramento de Doenças Respiratórias - SRAG e Síndromes Gripais</p>
-        <div class="update-badge">
-            🗓️ ATUALIZADO EM: {dados['data_extenso'].upper()}
-        </div>
-    </div>
-""", unsafe_allow_html=True)
-
-# MÉTRICAS
+# =========================
+# 📊 INDICADORES PRINCIPAIS
+# =========================
 col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{dados['total_srag']:,}</div>
-            <div>🏥 Internações SRAG</div>
-        </div>
-    """, unsafe_allow_html=True)
-with col2:
-    st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{dados['ocupacao_uti']}%</div>
-            <div>🛏️ Ocupação UTIs</div>
-        </div>
-    """, unsafe_allow_html=True)
-with col3:
-    st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{dados['total_atendimentos']:,}</div>
-            <div>🏥 Atendimentos (7d)</div>
-        </div>
-    """, unsafe_allow_html=True)
-with col4:
-    st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{dados['obitos']}</div>
-            <div>⚠️ Óbitos</div>
-        </div>
-    """, unsafe_allow_html=True)
 
-# DUAS COLUNAS PRINCIPAIS
-col_left, col_right = st.columns(2, gap="large")
+col1.metric("SRAG", int(row["srag_total"]))
+col2.metric("Atendimentos", int(row["atendimentos"]))
+col3.metric("Óbitos", int(row["obitos"]))
+col4.metric("SR (leve)", int(row["sr_total"]))
 
-# COLUNA ESQUERDA - SRAG
-with col_left:
-    st.markdown('<div class="section-title">🔬 MONITORAMENTO DE SRAG</div>', unsafe_allow_html=True)
-    
-    # Agentes Etiológicos
-    st.subheader("🧬 Agentes Etiológicos")
-    fig_agentes = px.pie(
-        values=list(dados["agentes"].values()),
-        names=list(dados["agentes"].keys()),
-        color_discrete_sequence=['#1a5276', '#2471a3', '#2e86c1', '#3498db', '#85c1e9'],
-        hole=0.4
-    )
-    fig_agentes.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_agentes, use_container_width=True)
-    
-    # Gráfico de Tendência
-    st.subheader("📈 Tendência por Semana Epidemiológica")
-    fig_tendencia = grafico_tendencia(dados)
-    st.plotly_chart(fig_tendencia, use_container_width=True)
+# =========================
+# 📊 INDICADORES DE GESTÃO
+# =========================
+st.subheader("📈 Indicadores Estratégicos")
 
-# COLUNA DIREITA - GESTÃO TERRITORIAL
-with col_right:
-    st.markdown('<div class="section-title">🏥 GESTÃO TERRITORIAL</div>', unsafe_allow_html=True)
-    
-    # Top 5
-    st.subheader("⭐ Top 5 Unidades com Maior Prevalência")
-    for item in dados["top5"]:
-        st.markdown(f"""
-            <div class="top5-item">
-                <span><strong>{item['nome']}</strong></span>
-                <span style="color: #002147; font-weight: bold;">{item['casos']} atendimentos</span>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    # Distritos
-    st.subheader("📍 Capilaridade por Distrito")
-    df_distritos = pd.DataFrame(dados["distritos"])
-    st.dataframe(
-        df_distritos,
-        column_config={
-            "nome": "Distrito",
-            "ubs": st.column_config.NumberColumn("UBS", format="%d"),
-            "atendimentos": st.column_config.NumberColumn("Atendimentos", format="%d")
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-    
-    # Ciclos Sazonais
-    st.subheader("❄️ Ciclos Sazonais Comparativos")
-    fig_ciclos = grafico_ciclos(dados)
-    st.plotly_chart(fig_ciclos, use_container_width=True)
+c1, c2, c3 = st.columns(3)
 
-# FOOTER
-st.markdown(f"""
-    <div class="footer">
-        <strong>📋 CRÉDITOS INSTITUCIONAIS</strong><br>
-        NIS (Núcleo de Informação em Saúde) | DIVEPI (Diretoria de Vigilância Epidemiológica) | CIEVS<br>
-        Relatório Gerado para Subsecretaria de Saúde — {dados['data_atualizacao']}
-    </div>
-""", unsafe_allow_html=True)
+c1.metric("Letalidade", f"{row['letalidade']:.1%}")
+c2.metric("Taxa UTI", f"{row['taxa_uti']:.1%}")
+c3.metric("Taxa Internação", f"{row['taxa_internacao']:.1%}")
 
-# Botão para exportar como PDF (via print do navegador)
-st.markdown("---")
-st.caption("💡 Para salvar como imagem: Pressione Ctrl+P (ou Cmd+P) e selecione 'Salvar como PDF' ou use ferramenta de screenshot")
+# =========================
+# 🧬 ETIOLOGIA
+# =========================
+st.subheader("🧬 Etiologia")
+
+etiologia = pd.DataFrame({
+    "Virus": ["COVID", "Influenza"],
+    "Valor": [row["covid"], row["influenza"]]
+})
+
+fig = px.pie(etiologia, values="Valor", names="Virus")
+st.plotly_chart(fig, use_container_width=True)
+
+# =========================
+# 🏥 SRAG DETALHE
+# =========================
+st.subheader("🏥 SRAG")
+
+c1, c2 = st.columns(2)
+c1.metric("Internações", int(row["srag_internacoes"]))
+c2.metric("UTI", int(row["srag_uti"]))
+
+# =========================
+# 🧠 ALERTA INTELIGENTE
+# =========================
+st.subheader("🧠 Situação")
+
+if row["letalidade"] > 0.1:
+    st.error("🚨 Alta letalidade")
+
+elif row["taxa_uti"] > 0.5:
+    st.warning("⚠️ Alta ocupação de UTI")
+
+else:
+    st.success("✅ Situação controlada")
