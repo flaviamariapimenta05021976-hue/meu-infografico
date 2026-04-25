@@ -1,16 +1,16 @@
 """
 Coletor de Dados Epidemiológicos - Power BI
-Extrai todas as informações disponíveis dos painéis e estrutura para análise
+Extrai TODOS os dados reais dos painéis, incluindo nomes de unidades e distritos
 """
 
 import pandas as pd
 from playwright.sync_api import sync_playwright
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 import json
 
-class ColetorEpidemiologico:
+class ColetorEpidemiologicoReal:
     def __init__(self):
         self.dados = {
             "data_coleta": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -18,362 +18,238 @@ class ColetorEpidemiologico:
             "sr": {},
             "atendimentos": {},
             "obitos": {},
-            "indicadores": {}
+            "indicadores": {},
+            "unidades_reais": [],  # Nomes reais das unidades
+            "distritos_reais": []   # Nomes reais dos distritos
         }
         
-        # URLs dos painéis (configurar conforme necessário)
+        # URLs dos painéis
         self.urls = {
-            "bi_doencas": "https://app.powerbi.com/view?r=eyJrIjoiMTUyOGJkOWItY2QwZS00MWJjLWE0MWMtNmY0MWYzYjYzY2I2IiwidCI6ImFlODYzMzdlLTU3NWUtNDMzMC05NDc2LTkzZGU2ODJiMDAyMCJ9",
-            # Adicionar outras URLs conforme necessário
-            # "bi_atendimentos": "URL_DO_PAINEL_DE_ATENDIMENTOS",
-            # "bi_obitos": "URL_DO_PAINEL_DE_OBITOS"
+            "bi_doencas": "https://app.powerbi.com/view?r=eyJrIjoiMTUyOGJkOWItY2QwZS00MWJjLWE0MWMtNmY0MWYzYjYzY2I2IiwidCI6ImFlODYzMzdlLTU3NWUtNDMzMC05NDc2LTkzZGU2ODJiMDAyMCJ9"
         }
 
-    def extrair_texto_visualizacoes(self, page):
-        """Extrai texto de todas as visualizações do Power BI"""
+    def extrair_texto_completo(self, page):
+        """Extrai TODO o texto visível do painel"""
         textos = []
         try:
-            # Tenta diferentes seletores comuns no Power BI
-            seletores = [
-                'visual-container-component',
-                '.visual',
-                '[class*="visual"]',
-                '[role="region"]',
-                '.card',
-                '.kpi',
-                '.metric'
-            ]
+            # Extrai texto de todos os elementos visíveis
+            body_text = page.locator('body').inner_text()
+            textos.append(body_text)
             
-            for seletor in seletores:
-                elementos = page.locator(seletor).all_inner_texts()
-                textos.extend(elementos)
+            # Extrai texto de visualizações específicas do Power BI
+            visualizacoes = page.locator('visual-container-component').all_inner_texts()
+            textos.extend(visualizacoes)
             
-            # Extrai dados de tabelas
+            # Extrai texto de cards e métricas
+            cards = page.locator('[class*="card"], [class*="metric"], [class*="kpi"]').all_inner_texts()
+            textos.extend(cards)
+            
+            # Extrai texto de tabelas
             tabelas = page.locator('table').all_inner_texts()
             textos.extend(tabelas)
             
-            # Extrai textos do body como fallback
-            body = page.locator('body').inner_text()
-            textos.append(body)
+            # Extrai texto de gráficos (títulos, legendas, valores)
+            graficos = page.locator('[class*="visual"], [class*="chart"]').all_inner_texts()
+            textos.extend(graficos)
             
         except Exception as e:
-            print(f"Erro ao extrair visualizações: {e}")
+            print(f"Erro ao extrair texto: {e}")
         
-        return textos
+        return "\n".join(textos)
 
-    def extrair_numeros(self, texto):
-        """Extrai números de um texto (formato brasileiro)"""
-        # Procura padrões de números brasileiros (1.234,56 ou 1234)
-        padroes = [
-            r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?)',  # 1.234,56
-            r'(\d+(?:,\d+)?)'  # 1234,56
+    def extrair_unidades_reais(self, texto):
+        """Extrai os nomes REAIS das unidades de saúde do texto"""
+        unidades = []
+        
+        # Padrões comuns para nomes de unidades de saúde
+        padroes_unidades = [
+            r'(Hospital\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'(UPA\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'(UBS\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'(Centro\s+de\s+Sa[uú]de\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'(Pronto\s+Atendimento\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)'
         ]
         
-        for padrao in padroes:
+        for padrao in padroes_unidades:
             matches = re.findall(padrao, texto)
-            if matches:
-                # Converte formato brasileiro para número
-                num_str = matches[0].replace('.', '').replace(',', '.')
+            unidades.extend(matches)
+        
+        # Remove duplicatas mantendo ordem
+        unidades_unicas = []
+        for unidade in unidades:
+            if unidade not in unidades_unicas:
+                unidades_unicas.append(unidade)
+        
+        return unidades_unicas[:10]  # Top 10 unidades
+
+    def extrair_distritos_reais(self, texto):
+        """Extrai os nomes REAIS dos distritos do texto"""
+        distritos = []
+        
+        # Padrões comuns para distritos/regiões
+        padroes_distritos = [
+            r'(Distrito\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'(Region(al|ais?)\s+[A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*)',
+            r'([A-Z][a-záéíóúãõç]+(?:\s+[A-Z][a-záéíóúãõç]+)*\s+(?:Norte|Sul|Leste|Oeste|Centro))',
+            r'(?:Norte|Sul|Leste|Oeste|Centro)\s+[A-Z][a-záéíóúãõç]+'
+        ]
+        
+        for padrao in padroes_distritos:
+            matches = re.findall(padrao, texto)
+            distritos.extend(matches)
+        
+        # Remove duplicatas
+        distritos_unicos = []
+        for distrito in distritos:
+            if distrito not in distritos_unicos:
+                distritos_unicos.append(distrito)
+        
+        return distritos_unicos[:10]  # Top 10 distritos
+
+    def extrair_numeros_com_contexto(self, texto):
+        """Extrai números com seu contexto (ex: 'Hospital X: 342 casos')"""
+        resultados = []
+        
+        # Padrão: texto + número
+        padrao = r'([A-Z][a-záéíóúãõç\s]+(?:Hospital|UPA|UBS|Centro)[A-Za-záéíóúãõç\s]*)[:\s-]*(\d{1,3}(?:\.\d{3})*(?:,\d+)?)'
+        
+        matches = re.findall(padrao, texto)
+        for match in matches:
+            nome = match[0].strip()
+            valor_str = match[1].replace('.', '').replace(',', '.')
+            try:
+                valor = float(valor_str)
+                resultados.append({"nome": nome, "valor": int(valor) if valor.is_integer() else valor})
+            except:
+                pass
+        
+        return resultados
+
+    def extrair_metricas_principais(self, texto):
+        """Extrai as métricas principais do painel"""
+        metricas = {}
+        
+        # Padrões para métricas comuns
+        padroes_metricas = {
+            "total_srag": r'(?:Total|Casos)\s+SRAG[:\s]*(\d{1,3}(?:\.\d{3})*)',
+            "obitos": r'(?:Óbitos|Obitos)[:\s]*(\d{1,3}(?:\.\d{3})*)',
+            "ocupacao_uti": r'(?:Ocupação|UTI)[:\s]*(\d{1,2}(?:,\d)?)\s*%',
+            "internacoes": r'(?:Internações|Internacoes)[:\s]*(\d{1,3}(?:\.\d{3})*)',
+            "covid": r'COVID[:\s]*(\d{1,3}(?:\.\d{3})*)',
+            "influenza": r'Influenza[:\s]*(\d{1,3}(?:\.\d{3})*)'
+        }
+        
+        for nome, padrao in padroes_metricas.items():
+            match = re.search(padrao, texto, re.IGNORECASE)
+            if match:
+                valor_str = match.group(1).replace('.', '').replace(',', '.')
                 try:
-                    return float(num_str)
+                    if '%' in padrao:
+                        metricas[nome] = float(valor_str)
+                    else:
+                        metricas[nome] = int(float(valor_str))
                 except:
-                    return matches[0]
-        return None
+                    metricas[nome] = valor_str
+        
+        return metricas
 
-    def processar_casos_srag(self, textos):
-        """Processa dados de SRAG"""
-        srag_data = {
-            "total_casos": None,
-            "internacoes": None,
-            "internacoes_uti": None,
-            "ventilacao_mecanica": None,
-            "curas": None,
-            "obitos": None,
-            "confirmados_covid": None,
-            "confirmados_influenza": None,
-            "descartados": None,
-            "taxa_letalidade": None,
-            "tempo_medio_internacao": None
-        }
+    def extrair_dados_tabela(self, page):
+        """Extrai dados de tabelas do Power BI"""
+        dados_tabela = []
         
-        for texto in textos:
-            texto_lower = texto.lower()
-            
-            # Busca totais
-            if 'total' in texto_lower and ('srag' in texto_lower or 'casos' in texto_lower):
-                num = self.extrair_numeros(texto)
-                if num and not srag_data["total_casos"]:
-                    srag_data["total_casos"] = int(num) if isinstance(num, float) else num
-            
-            # Busca internações UTI
-            if 'uti' in texto_lower and ('internação' in texto_lower or 'internacao' in texto_lower):
-                num = self.extrair_numeros(texto)
-                if num:
-                    srag_data["internacoes_uti"] = int(num) if isinstance(num, float) else num
-            
-            # Busca óbitos
-            if 'óbito' in texto_lower or 'obito' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    srag_data["obitos"] = int(num) if isinstance(num, float) else num
-            
-            # Busca COVID
-            if 'covid' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    srag_data["confirmados_covid"] = int(num) if isinstance(num, float) else num
-                    
-            # Busca Influenza
-            if 'influenza' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    srag_data["confirmados_influenza"] = int(num) if isinstance(num, float) else num
+        try:
+            # Procura por elementos de tabela
+            tabelas = page.locator('table').all()
+            for tabela in tabelas:
+                linhas = tabela.locator('tr').all()
+                for linha in linhas:
+                    celulas = linha.locator('td, th').all_inner_texts()
+                    if celulas and len(celulas) >= 2:
+                        dados_tabela.append(celulas)
+        except Exception as e:
+            print(f"Erro ao extrair tabela: {e}")
         
-        # Calcula taxa de letalidade se tiver os dados
-        if srag_data["total_casos"] and srag_data["obitos"]:
-            try:
-                srag_data["taxa_letalidade"] = (srag_data["obitos"] / srag_data["total_casos"]) * 100
-            except:
-                pass
-                
-        return srag_data
+        return dados_tabela
 
-    def processar_casos_sr(self, textos):
-        """Processa dados de SR (casos leves)"""
-        sr_data = {
-            "total_atendimentos": None,
-            "casos_suspeitos": None,
-            "casos_confirmados": None,
-            "tendencia": None
-        }
+    def extrair_casos_por_semana(self, texto):
+        """Extrai série temporal de casos por semana"""
+        semanas = []
+        casos = []
         
-        for texto in textos:
-            texto_lower = texto.lower()
-            
-            if 'sr' in texto_lower or 'síndrome respiratória' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num and not sr_data["total_atendimentos"]:
-                    sr_data["total_atendimentos"] = int(num) if isinstance(num, float) else num
-                    
-            if 'suspeito' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    sr_data["casos_suspeitos"] = int(num) if isinstance(num, float) else num
+        # Procura padrões como "Semana 1: 12 casos"
+        padrao = r'Semana\s+(\d+)[:\s-]*(\d{1,3}(?:\.\d{3})*)'
+        matches = re.findall(padrao, texto, re.IGNORECASE)
         
-        return sr_data
-
-    def processar_atendimentos(self, textos):
-        """Processa dados de atendimentos"""
-        atendimentos_data = {
-            "total": None,
-            "aps": None,  # Atenção Primária
-            "upa": None,
-            "hospitalar": None,
-            "classificacao_risco": {},
-            "encaminhamentos": None
-        }
+        for match in matches:
+            semanas.append(int(match[0]))
+            casos.append(int(match[1].replace('.', '')))
         
-        for texto in textos:
-            texto_lower = texto.lower()
-            
-            if 'atendimento' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num and not atendimentos_data["total"]:
-                    atendimentos_data["total"] = int(num) if isinstance(num, float) else num
-            
-            # Busca por tipo de unidade
-            if 'ubs' in texto_lower or 'aps' in texto_lower or 'básica' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    atendimentos_data["aps"] = int(num) if isinstance(num, float) else num
-                    
-            if 'upa' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    atendimentos_data["upa"] = int(num) if isinstance(num, float) else num
-                    
-            if 'hospital' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    atendimentos_data["hospitalar"] = int(num) if isinstance(num, float) else num
+        # Se não encontrou, ordena e retorna listas vazias
+        if semanas and casos:
+            # Ordena por semana
+            pares = sorted(zip(semanas, casos))
+            semanas, casos = zip(*pares)
+            return list(semanas), list(casos)
         
-        return atendimentos_data
-
-    def processar_obitos(self, textos):
-        """Processa dados de óbitos detalhados"""
-        obitos_data = {
-            "total": None,
-            "taxa_letalidade": None,
-            "local_hospital": None,
-            "local_domicilio": None,
-            "por_idade": {},
-            "por_comorbidades": {},
-            "por_etiologia": {
-                "covid": None,
-                "influenza": None,
-                "indeterminado": None
-            },
-            "tempo_medio_sintomas_obito": None,
-            "vacinados": None,
-            "nao_vacinados": None
-        }
-        
-        for texto in textos:
-            texto_lower = texto.lower()
-            
-            if 'óbito' in texto_lower or 'obito' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num and not obitos_data["total"]:
-                    obitos_data["total"] = int(num) if isinstance(num, float) else num
-            
-            # Busca por local
-            if 'hospital' in texto_lower and 'óbito' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    obitos_data["local_hospital"] = int(num) if isinstance(num, float) else num
-                    
-            if 'domicílio' in texto_lower or 'domicilio' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    obitos_data["local_domicilio"] = int(num) if isinstance(num, float) else num
-            
-            # Busca por vacinação
-            if 'vacinado' in texto_lower:
-                num = self.extrair_numeros(texto)
-                if num:
-                    obitos_data["vacinados"] = int(num) if isinstance(num, float) else num
-        
-        return obitos_data
-
-    def calcular_indicadores(self, srag, sr, atendimentos, obitos):
-        """Calcula os indicadores derivados"""
-        indicadores = {
-            "taxa_agravamento": None,  # SR -> SRAG
-            "letalidade": None,  # SRAG -> Óbito
-            "taxa_internacao": None,  # SRAG -> Internação
-            "pressao_assistencial": None,  # Atendimentos -> Internações
-            "ocupacao_uti": None,
-            "tendencia": "estável"
-        }
-        
-        # Taxa de agravamento (SR -> SRAG)
-        if sr.get("total_atendimentos") and srag.get("total_casos"):
-            try:
-                indicadores["taxa_agravamento"] = (srag["total_casos"] / sr["total_atendimentos"]) * 100
-            except:
-                pass
-        
-        # Letalidade (SRAG -> Óbito)
-        if srag.get("total_casos") and obitos.get("total"):
-            try:
-                indicadores["letalidade"] = (obitos["total"] / srag["total_casos"]) * 100
-            except:
-                pass
-        
-        # Taxa de internação
-        if srag.get("total_casos") and srag.get("internacoes"):
-            try:
-                indicadores["taxa_internacao"] = (srag["internacoes"] / srag["total_casos"]) * 100
-            except:
-                pass
-        
-        # Pressão assistencial
-        if atendimentos.get("total") and srag.get("internacoes"):
-            try:
-                indicadores["pressao_assistencial"] = (srag["internacoes"] / atendimentos["total"]) * 100
-            except:
-                pass
-        
-        # Ocupação UTI (se disponível)
-        if srag.get("internacoes_uti") and srag.get("internacoes"):
-            try:
-                indicadores["ocupacao_uti"] = (srag["internacoes_uti"] / srag["internacoes"]) * 100
-            except:
-                pass
-        
-        return indicadores
-
-    def gerar_dataframe_estruturado(self):
-        """Gera DataFrames estruturados para análise"""
-        
-        # DataFrame de casos por semana (simulado - ajustar conforme dados reais)
-        semanas = list(range(1, 18))  # 17 semanas
-        df_casos = pd.DataFrame({
-            "semana_epidemiologica": semanas,
-            "casos_sr": [12, 18, 25, 42, 78, 125, 198, 267, 310, 345, 398, 420, 445, 432, 398, 345, 320],
-            "casos_srag": [5, 8, 12, 20, 35, 58, 95, 128, 156, 178, 195, 210, 225, 218, 195, 168, 145],
-            "obitos": [0, 0, 1, 2, 3, 5, 8, 12, 15, 18, 20, 22, 25, 24, 22, 18, 15],
-            "internacoes": [3, 5, 8, 15, 28, 45, 72, 98, 120, 138, 152, 165, 178, 172, 155, 132, 115],
-            "internacoes_uti": [1, 2, 3, 6, 12, 20, 32, 45, 55, 62, 68, 72, 78, 75, 68, 58, 48]
-        })
-        
-        # DataFrame de perfil etário
-        df_idade = pd.DataFrame({
-            "faixa_etaria": ["0-4", "5-11", "12-17", "18-29", "30-39", "40-49", "50-59", "60+"],
-            "casos_srag": [45, 32, 28, 156, 198, 245, 312, 480],
-            "obitos": [2, 1, 1, 8, 15, 28, 45, 98],
-            "taxa_letalidade": [4.4, 3.1, 3.6, 5.1, 7.6, 11.4, 14.4, 20.4]
-        })
-        
-        # DataFrame por distrito
-        df_distrito = pd.DataFrame({
-            "distrito": ["Centro", "Norte", "Sul", "Leste", "Oeste"],
-            "atendimentos_sr": [1250, 980, 875, 645, 1120],
-            "casos_srag": [320, 245, 198, 156, 278],
-            "obitos": [18, 12, 10, 8, 15],
-            "internacoes": [245, 185, 148, 112, 198],
-            "uti": [85, 62, 48, 35, 68]
-        })
-        
-        # DataFrame de série temporal diária
-        datas = [(datetime.now() - timedelta(days=x)).strftime("%Y-%m-%d") for x in range(30, 0, -1)]
-        df_diario = pd.DataFrame({
-            "data": datas,
-            "atendimentos_sr": [42, 45, 48, 52, 55, 58, 62, 65, 68, 72, 75, 78, 82, 85, 88, 92, 95, 98, 102, 105, 108, 112, 115, 118, 122, 125, 128, 132, 135, 138],
-            "internacoes": [8, 8, 9, 10, 10, 11, 12, 12, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 20, 20, 21, 22, 22, 23, 24, 24, 25, 26, 26, 27]
-        })
-        
-        return df_casos, df_idade, df_distrito, df_diario
+        return list(range(1, 17)), []  # Fallback
 
     def extrair(self):
-        """Executa a extração dos dados"""
+        """Executa a extração completa dos dados"""
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             
             try:
-                print("🔍 Iniciando coleta de dados...")
+                print("🔍 Iniciando coleta de dados REAIS dos painéis...")
                 
-                # Para cada URL configurada
                 for nome, url in self.urls.items():
                     print(f"📊 Acessando {nome}...")
                     page.goto(url, wait_until="networkidle")
-                    time.sleep(10)  # Aguarda carregamento
+                    time.sleep(15)  # Aguarda carregamento completo
                     
-                    # Extrai textos das visualizações
-                    textos = self.extrair_texto_visualizacoes(page)
+                    # Extrai TODO o texto do painel
+                    texto_completo = self.extrair_texto_completo(page)
                     
-                    # Processa os diferentes tipos de dados
-                    self.dados["srag"] = self.processar_casos_srag(textos)
-                    self.dados["sr"] = self.processar_casos_sr(textos)
-                    self.dados["atendimentos"] = self.processar_atendimentos(textos)
-                    self.dados["obitos"] = self.processar_obitos(textos)
+                    # Extrai unidades REAIS
+                    unidades_reais = self.extrair_unidades_reais(texto_completo)
+                    self.dados["unidades_reais"] = unidades_reais
+                    print(f"🏥 Unidades encontradas: {unidades_reais}")
                     
-                    print(f"✅ {nome} processado")
+                    # Extrai distritos REAIS
+                    distritos_reais = self.extrair_distritos_reais(texto_completo)
+                    self.dados["distritos_reais"] = distritos_reais
+                    print(f"📍 Distritos encontrados: {distritos_reais}")
+                    
+                    # Extrai métricas principais
+                    metricas = self.extrair_metricas_principais(texto_completo)
+                    self.dados["srag"] = metricas
+                    print(f"📈 Métricas: {metricas}")
+                    
+                    # Extrai dados de tabelas
+                    dados_tabela = self.extrair_dados_tabela(page)
+                    if dados_tabela:
+                        self.dados["tabelas"] = dados_tabela
+                    
+                    # Extrai números com contexto (para Top 5)
+                    numeros_contexto = self.extrair_numeros_com_contexto(texto_completo)
+                    if numeros_contexto:
+                        self.dados["top5_candidatos"] = sorted(numeros_contexto, 
+                                                              key=lambda x: x.get("valor", 0), 
+                                                              reverse=True)[:5]
+                    
+                    # Extrai casos por semana
+                    semanas, casos = self.extrair_casos_por_semana(texto_completo)
+                    if casos:
+                        self.dados["srag"]["semanas"] = semanas
+                        self.dados["srag"]["casos_semanais"] = casos
+                    
+                    print(f"✅ {nome} processado com sucesso")
                 
                 # Calcula indicadores derivados
-                self.dados["indicadores"] = self.calcular_indicadores(
-                    self.dados["srag"],
-                    self.dados["sr"],
-                    self.dados["atendimentos"],
-                    self.dados["obitos"]
-                )
+                self.calcular_indicadores()
                 
-                # Gera DataFrames estruturados
-                df_casos, df_idade, df_distrito, df_diario = self.gerar_dataframe_estruturado()
-                
-                # Salva todos os dados
-                self.salvar_dados(df_casos, df_idade, df_distrito, df_diario)
+                # Salva os dados extraídos
+                self.salvar_dados_reais()
                 
                 print("✅ Coleta finalizada com sucesso!")
                 
@@ -383,63 +259,68 @@ class ColetorEpidemiologico:
             finally:
                 browser.close()
 
-    def salvar_dados(self, df_casos, df_idade, df_distrito, df_diario):
-        """Salva todos os dados em arquivos CSV"""
+    def calcular_indicadores(self):
+        """Calcula indicadores derivados dos dados reais"""
+        srag = self.dados.get("srag", {})
         
-        # Salva dados brutos
-        with open("dados_coleta_brutos.json", "w", encoding="utf-8") as f:
+        # Calcula taxa de letalidade
+        if srag.get("total_srag") and srag.get("obitos"):
+            self.dados["indicadores"]["letalidade"] = (srag["obitos"] / srag["total_srag"]) * 100
+        
+        # Calcula ocupação UTI se disponível
+        if srag.get("internacoes") and srag.get("ocupacao_uti"):
+            self.dados["indicadores"]["ocupacao_uti_percentual"] = srag["ocupacao_uti"]
+
+    def salvar_dados_reais(self):
+        """Salva os dados REAIS extraídos dos painéis"""
+        
+        # 1. Salva dados brutos completos
+        with open("dados_reais_brutos.json", "w", encoding="utf-8") as f:
             json.dump(self.dados, f, ensure_ascii=False, indent=2)
         
-        # Salva DataFrames
-        df_casos.to_csv("casos_por_semana.csv", index=False)
-        df_idade.to_csv("perfil_etario.csv", index=False)
-        df_distrito.to_csv("distribuicao_distritos.csv", index=False)
-        df_diario.to_csv("serie_temporal_diaria.csv", index=False)
+        # 2. Cria CSV com os dados REAIS das unidades
+        if self.dados.get("unidades_reais"):
+            df_unidades = pd.DataFrame({
+                "unidade": self.dados["unidades_reais"],
+                "casos": [0] * len(self.dados["unidades_reais"])  # Placeholder, será atualizado
+            })
+            df_unidades.to_csv("unidades_reais.csv", index=False)
+            print(f"📁 Salvo: unidades_reais.csv com {len(self.dados['unidades_reais'])} unidades")
         
-        # Cria um CSV consolidado para o dashboard
+        # 3. Cria CSV com os dados REAIS dos distritos
+        if self.dados.get("distritos_reais"):
+            df_distritos = pd.DataFrame({
+                "distrito": self.dados["distritos_reais"]
+            })
+            df_distritos.to_csv("distritos_reais.csv", index=False)
+            print(f"📁 Salvo: distritos_reais.csv com {len(self.dados['distritos_reais'])} distritos")
+        
+        # 4. Cria CSV consolidado com métricas reais
         df_consolidado = pd.DataFrame({
-            "indicador": [
-                "Total Casos SRAG",
-                "Óbitos",
-                "Internações",
-                "Internações UTI",
-                "Taxa de Letalidade",
-                "Taxa de Agravamento SR→SRAG",
-                "Taxa de Internação",
-                "Pressão Assistencial",
-                "Ocupação UTI",
-                "Data da Coleta"
-            ],
-            "valor": [
-                self.dados["srag"].get("total_casos", 0),
-                self.dados["obitos"].get("total", 0),
-                self.dados["srag"].get("internacoes", 0),
-                self.dados["srag"].get("internacoes_uti", 0),
-                f"{self.dados['indicadores'].get('letalidade', 0):.1f}%",
-                f"{self.dados['indicadores'].get('taxa_agravamento', 0):.1f}%",
-                f"{self.dados['indicadores'].get('taxa_internacao', 0):.1f}%",
-                f"{self.dados['indicadores'].get('pressao_assistencial', 0):.1f}%",
-                f"{self.dados['indicadores'].get('ocupacao_uti', 0):.1f}%",
-                self.dados["data_coleta"]
-            ]
+            "indicador": list(self.dados["srag"].keys()),
+            "valor": [str(v) for v in self.dados["srag"].values()]
         })
+        df_consolidado.to_csv("metricas_reais.csv", index=False)
         
-        df_consolidado.to_csv("dados_consolidados_dashboard.csv", index=False)
+        # 5. Cria CSV de casos por semana (se disponível)
+        if "casos_semanais" in self.dados["srag"]:
+            semanas = self.dados["srag"].get("semanas", list(range(1, len(self.dados["srag"]["casos_semanais"]) + 1)))
+            df_casos = pd.DataFrame({
+                "semana_epidemiologica": semanas,
+                "casos_srag": self.dados["srag"]["casos_semanais"]
+            })
+            df_casos.to_csv("casos_reais_por_semana.csv", index=False)
         
-        print("📁 Arquivos salvos:")
-        print("  - dados_coleta_brutos.json")
-        print("  - casos_por_semana.csv")
-        print("  - perfil_etario.csv")
-        print("  - distribuicao_distritos.csv")
-        print("  - serie_temporal_diaria.csv")
-        print("  - dados_consolidados_dashboard.csv")
-
+        print("\n📁 ARQUIVOS GERADOS COM DADOS REAIS:")
+        print("  - dados_reais_brutos.json (todos os dados extraídos)")
+        print("  - unidades_reais.csv (nomes reais das unidades)")
+        print("  - distritos_reais.csv (nomes reais dos distritos)")
+        print("  - metricas_reais.csv (todas as métricas encontradas)")
+        print("  - casos_reais_por_semana.csv (série temporal)")
 
 def main():
-    """Função principal"""
-    coletor = ColetorEpidemiologico()
+    coletor = ColetorEpidemiologicoReal()
     coletor.extrair()
-
 
 if __name__ == "__main__":
     main()
