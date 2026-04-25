@@ -2,44 +2,90 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import time
 from datetime import datetime
+import re
+
+def limpar_numero(valor):
+    if not valor:
+        return None
+    valor = valor.replace('.', '').replace(',', '.')
+    try:
+        return float(valor)
+    except:
+        return None
+
+def extrair_numero(texto, palavra):
+    for t in texto:
+        if palavra in t.lower():
+            num = re.findall(r'\d+[\.,]?\d*', t)
+            if num:
+                return limpar_numero(num[0])
+    return None
 
 def extrair():
     with sync_playwright() as p:
-        # Modo 'headless=True' para rodar escondido na nuvem
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        # Dicionário onde guardamos as informações
         dados = {
-            "data": datetime.now().strftime("%d/%m/%Y"),
-            "srag_total": "Carregando...",
-            "covid": "0%",
-            "influenza": "0%"
+            "data": datetime.now(),
+
+            # SRAG
+            "srag_total": None,
+            "srag_uti": None,
+            "srag_internacoes": None,
+            "srag_obitos": None,
+
+            # SR
+            "sr_total": None,
+
+            # Assistência
+            "atendimentos": None,
+
+            # Óbitos geral
+            "obitos": None,
+
+            # Etiologia
+            "covid": None,
+            "influenza": None
         }
 
         try:
-            # ACESSANDO BI 2 (Doenças)
-            url = "https://app.powerbi.com/view?r=eyJrIjoiMTUyOGJkOWItY2QwZS00MWJjLWE0MWMtNmY0MWYzYjYzY2I2IiwidCI6ImFlODYzMzdlLTU3NWUtNDMzMC05NDc2LTkzZGU2ODJiMDAyMCJ9"
-            page.goto(url, wait_until="networkidle")
-            time.sleep(15) # Espera o BI carregar
+            print("🔄 analisando arquivo...")
 
-            # Tenta pegar o total de casos (ajustado para o padrão do BI)
-            try:
-                # O robô busca qualquer texto que esteja dentro do painel de resumo
-                elementos = page.locator('visual-container-component').all_inner_texts()
-                dados["srag_total"] = elementos[0].split('\n')[0] if elementos else "1.240"
-            except:
-                dados["srag_total"] = "Verificar BI"
+            page.goto("SEU_LINK_AQUI", wait_until="networkidle")
+            time.sleep(20)
+
+            textos = page.locator("visual-container-component").all_inner_texts()
+
+            dados["srag_total"] = extrair_numero(textos, "srag")
+            dados["srag_obitos"] = extrair_numero(textos, "óbito")
+            dados["srag_uti"] = extrair_numero(textos, "uti")
+            dados["srag_internacoes"] = extrair_numero(textos, "intern")
+
+            dados["sr_total"] = extrair_numero(textos, "síndrome")
+            dados["atendimentos"] = extrair_numero(textos, "atendimento")
+            dados["obitos"] = extrair_numero(textos, "óbitos")
+
+            dados["covid"] = extrair_numero(textos, "covid")
+            dados["influenza"] = extrair_numero(textos, "influenza")
 
         except Exception as e:
-            print(f"Erro: {e}")
-        
+            print("Erro:", e)
+
         browser.close()
 
-        # SALVA O ARQUIVO QUE O APP VAI LER
         df = pd.DataFrame([dados])
-        df.to_csv("dados_epidemiologicos.csv", index=False)
-        print("Dados salvos com sucesso!")
+
+        # ======================
+        # 📊 INDICADORES
+        # ======================
+
+        df["letalidade"] = df["srag_obitos"] / df["srag_total"]
+        df["taxa_uti"] = df["srag_uti"] / df["srag_total"]
+        df["taxa_internacao"] = df["srag_internacoes"] / df["srag_total"]
+
+        df.to_csv("dados.csv", index=False)
+        print("✅ dados salvos")
 
 if __name__ == "__main__":
     extrair()
