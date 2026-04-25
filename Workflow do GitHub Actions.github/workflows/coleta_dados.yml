@@ -1,0 +1,52 @@
+name: Coletar Dados do Power BI
+
+on:
+  schedule:
+    # Executa a cada 6 horas
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # Permite executar manualmente
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'coletor.py'
+
+jobs:
+  coleta:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Instalar dependências
+      run: |
+        pip install -r requirements.txt
+        playwright install chromium
+        playwright install-deps
+        
+    - name: Executar coletor de dados
+      run: python coletor.py
+      
+    - name: Upload dos dados como artefato
+      uses: actions/upload-artifact@v4
+      with:
+        name: dados-epidemiologicos
+        path: |
+          *.csv
+          *.json
+          *.txt
+        retention-days: 7
+        
+    - name: Commit e push dos dados (opcional)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add *.csv *.json *.txt 2>/dev/null || true
+        git diff --quiet && git diff --staged --quiet || git commit -m "Atualizar dados: $(date '+%Y-%m-%d %H:%M')"
+        git push
+      continue-on-error: true
