@@ -3,7 +3,18 @@ INFOGRAFÉPIDEMIOLÓGICO - SRAG
 Dashboard para monitoramento de Síndrome Respiratória Aguda Grave
 Exibe APENAS os dados reais extraídos dos painéis Power BI
 """
+import os
+import json
 
+# Tenta carregar metadata da coleta
+def carregar_metadata():
+    try:
+        with open("metadata_coleta.json", "r") as f:
+            return json.load(f)
+    except:
+        return {"ultima_coleta": "Dados não disponíveis", "status": "pendente"}
+
+metadata = carregar_metadata()
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
