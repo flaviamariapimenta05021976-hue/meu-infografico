@@ -1,8 +1,9 @@
-projeto/
-├── app.py                          # Este script do dashboard
-├── coletor_dados.py                # Script coletor dos painéis
-├── metricas_reais.csv              # Gerado pelo coletor
-├── unidades_reais.csv              # Gerado pelo coletor  
-├── distritos_reais.csv             # Gerado pelo coletor
-├── casos_reais_por_semana.csv      # Gerado pelo coletor
-└── dados_reais_brutos.json         # Gerado pelo coletor (backup)
+seu-repositorio/
+├── .github/
+│   └── workflows/
+│       └── coleta_dados.yml          # Workflow do GitHub Actions
+├── app.py                            # Dashboard Streamlit
+├── coletor.py                        # Coletor de dados do Power BI
+├── requirements.txt                  # Dependências
+├── .gitignore                        # Arquivos ignorados
+└── README.md                         # Documentação
